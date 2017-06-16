@@ -104,3 +104,47 @@ def getRule(parentRule,ruleName):
 
     #Default return of empty dict
     return ruleContent
+
+def insertRule(completeRuleSet,newRuleSet,ruleName='default',whereTo='insertAfter'):
+    """
+    Function to fetch json content of rule
+
+    Parameters
+    ----------
+    parentRule : <List>
+        Default parent rule represented as a list
+
+    ruleName: <String>
+        Name of the rule
+
+    Returns
+    -------
+    rule : Json representation of a rule
+    """
+    if ruleName == 'default':
+        for everyRule in completeRuleSet:
+            everyRule['children'].append(newRuleSet)
+    else:
+        positionsList = []
+        for index, eachRule in enumerate(completeRuleSet):
+            if eachRule['name'] == ruleName:
+                if whereTo == 'insertAfter':
+                    position = index + 1
+                elif whereTo == 'insertBefore':
+                    position = index - 1 if index > 0 else 0
+                elif whereTo == 'replace':
+                    position = index
+                #Append the position/index. This is needed to handle multipl
+                #rules with same name.
+                positionsList.append(position)
+            else:
+                #Check whether we have child rules, where in name can be found
+                if len(eachRule['children']) != 0:
+                    insertRule(eachRule['children'],newRuleSet,ruleName,whereTo)
+
+        #Recursion is fun. This code executes in reverse order from stack
+        #This is the place where rule insertion happens
+        for everyPosition in positionsList:
+            completeRuleSet.insert(everyPosition,newRuleSet)
+
+    return completeRuleSet

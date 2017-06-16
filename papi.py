@@ -1,8 +1,8 @@
 '''
-// Good luck with this code. Do praise if its good.
-// And dont curse if its bad :)
-Author: Vreddhi Bhat
-Contact: vbhat@akamai.com
+// Good luck with this code. This leverages akamai OPEN API.
+// In case you need
+// explanation contact the initiators.
+Initiators: vbhat@akamai.com and aetsai@akamai.com
 '''
 
 import json
@@ -13,6 +13,9 @@ import configparser
 import requests
 import os
 import logging
+import re
+import ast
+import shutil
 
 #Setup logging
 if not os.path.exists('logs'):
@@ -56,13 +59,14 @@ except (NameError, AttributeError, KeyError):
 parser = argparse.ArgumentParser()
 parser.add_argument("-help",help="Use -h for detailed help options",action="store_true")
 parser.add_argument("-setup",help="Setup a local repository of group and property details",action="store_true")
+parser.add_argument("-create",help="Create a property",action="store_true")
 
 parser.add_argument("-debug",help="DEBUG mode to generate additional logs for troubleshooting",action="store_true")
 
 args = parser.parse_args()
 
 
-if not args.setup:
+if not args.setup and not args.create:
     rootLogger.info("Use -h for help options")
     exit()
 
@@ -71,8 +75,10 @@ if not args.setup:
 if args.debug:
     rootLogger.setLevel(logging.DEBUG)
 
-
 if args.setup:
+    #Delete the setup folder before we start
+    if os.path.exists('setup'):
+        shutil.rmtree('setup')
     #Create setup folder if it does not exist
     if not os.path.exists('setup'):
         os.makedirs('setup')
@@ -83,15 +89,23 @@ if args.setup:
     papiObject = PapiWrapper(access_hostname)
     rootLogger.info('Setting up pre-requisites')
     contractsObject = papiObject.getContracts(session)
+    propertiesList = {}
     if contractsObject.status_code == 200:
         with open(os.path.join('setup','contracts','contracts.json'),'w') as contractsFile:
             contractsFile.write(json.dumps(contractsObject.json(), indent = 4))
         for eachContract in contractsObject.json()['contracts']['items']:
             contractsName = eachContract['contractTypeName']
             contractId = eachContract['contractId']
+            propertiesList[contractId] = []
+            #Create contracts folder
             contractFolder = os.path.join('setup','contracts', contractId)
             if not os.path.exists(contractFolder):
                 os.makedirs(contractFolder)
+
+            #Create groups folder
+            groupsFolder = os.path.join('setup','contracts',contractId,'groups')
+            if not os.path.exists(groupsFolder):
+                os.makedirs(groupsFolder)
 
             #Let us find out the products in this contract now
             productsObject = papiObject.listProducts(session, contractId=contractId)
@@ -107,7 +121,12 @@ if args.setup:
                 pass
 
             #Create master edgehostname.json file under each contract folder
-            with open(os.path.join('setup','contracts',contractId,'edgehostname.json'),'w') as edgehostnameFileHandler:
+            with open(os.path.join('setup','contracts',contractId,'edgehostnames.json'),'w') as edgehostnameFileHandler:
+                #Do Nothing
+                pass
+
+            #Create master edgehostname.json file under each contract folder
+            with open(os.path.join('setup','contracts',contractId,'groups','groups.json'),'w') as GroupsFileHandler:
                 #Do Nothing
                 pass
     else:
@@ -128,10 +147,11 @@ if args.setup:
                 for everyContract in everyGroup['contractIds']:
                     #Logic to extract group info and move it to right contract folder
                     contractId = everyContract
-                    groupsFolder = os.path.join('setup','contracts',contractId,'groups')
-                    if not os.path.exists(groupsFolder):
-                        os.makedirs(groupsFolder)
                     try:
+                        #Update the master groups file
+                        with open(os.path.join('setup','contracts',contractId,'groups','groups.json'),'a') as GroupsFileHandler:
+                            GroupsFileHandler.write(json.dumps(everyGroup, indent = 4))
+                        #Create individual groups file
                         groupFile = groupName + '.json'
                         with open(os.path.join(groupsFolder,groupFile), 'w') as groupFileHandler:
                             groupFileHandler.write(json.dumps(everyGroup, indent = 4))
@@ -145,6 +165,7 @@ if args.setup:
                         os.makedirs(propertiesFolder)
                     rootLogger.info('Fetching Properties info of group: ' + groupName)
                     propertiesObject = papiObject.getAllProperties(session, contractId, groupId)
+
                     if propertiesObject.status_code == 200:
                         #Remove the unwanted data
                         for everyProperty in propertiesObject.json()['properties']['items']:
@@ -161,10 +182,8 @@ if args.setup:
                                     propertyFileHandler.write(json.dumps(everyProperty, indent = 4))
                             except FileNotFoundError:
                                 rootLogger.info('Unable to write file ' + propertyName + '.json')
-                            #Update the master propeties.json file under each contract
-                            with open(os.path.join('setup','contracts',contractId,'properties.json'),'a') as propertiesFileHandler:
-                                propertiesFileHandler.write(json.dumps(everyProperty, indent = 4))
-                                propertiesFileHandler.write(',')
+                            #Update the propertiesList list with property details
+                            propertiesList[contractId].append(everyProperty)
                     else:
                         rootLogger.info('Unable to fetch properties info for group: ' + groupId + ' contract: ' + contractId)
 
@@ -185,7 +204,8 @@ if args.setup:
                             except FileNotFoundError:
                                 rootLogger.info('Unable to write file ' + edgeHostnameDomain + '.json')
                             #Update the master edgehostname.json file under each contract
-                            with open(os.path.join('setup','contracts',contractId,'edgehostname.json'),'a') as edgehostnamesFileHandler:
+                            with open(os.path.join('setup','contracts',contractId,'edgehostnames.json'),'a') as edgehostnamesFileHandler:
+                                edgehostnamesFileHandler.write(',')
                                 edgehostnamesFileHandler.write(json.dumps(everyEdgeHostNameDetail, indent = 4))
                                 edgehostnamesFileHandler.write(',')
                     else:
@@ -193,6 +213,11 @@ if args.setup:
                 rootLogger.info('-------------- *************** --------------\n\n')
             else:
                 rootLogger.info('Ignoring  Group: ' + groupName + ' as it is not associated to any Contract' )
+
+        #Update the master propeties.json file under each contract
+        for contractItem in propertiesList:
+            with open(os.path.join('setup','contracts',contractItem,'properties.json'),'w') as propertiesFileHandler:
+                propertiesFileHandler.write(json.dumps(propertiesList[contractItem], indent = 4))
     else:
         rootLogger.info('Unable to fetch group related information')
 
@@ -202,4 +227,91 @@ if args.setup:
             if everyFilename == 'properties.json' or everyFilename == 'edgehostname.json':
                 with open(os.path.join('setup','contracts',contractId,everyFilename),'r+') as masterFileHandler:
                     masterFileContent = masterFileHandler.read().rstrip(',')
+                    masterFileContent = masterFileHandler.read().lstrip(',')
                     masterFileHandler.write(masterFileContent)
+
+if args.create:
+    try:
+        recommendedValues = configparser.ConfigParser()
+        recommendedValues.read(os.path.join('config','akau4_template.txt'))
+        sections = recommendedValues.sections()
+
+        with open(os.path.join('config','iontemplate_parameters.json'),'r') as templateFileHandler:
+            templateFileContent = templateFileHandler.read()
+
+        accountId = recommendedValues['property_setup']['accountId']
+        contractId = recommendedValues['property_setup']['contractId']
+        groupId = recommendedValues['property_setup']['groupId']
+        templateFileContent = templateFileContent.replace('|prop.accountId|',recommendedValues['property_setup']['accountId'])
+        templateFileContent = templateFileContent.replace('|prop.contractId|',recommendedValues['property_setup']['contractId'])
+        templateFileContent = templateFileContent.replace('|prop.groupId|',recommendedValues['property_setup']['groupId'])
+
+        templateFileContent = templateFileContent.replace('|prop.propertyName|',recommendedValues['property_info']['propertyName'])
+        templateFileContent = templateFileContent.replace('"|prop.cpcode|"',recommendedValues['property_info']['cpcode'])
+        templateFileContent = templateFileContent.replace('|prop.originHostname|',recommendedValues['property_info']['originHostname'])
+        templateFileContent = templateFileContent.replace('|prop.siteShieldName|',recommendedValues['property_info']['siteShieldName'])
+        templateFileContent = templateFileContent.replace('|prop.sureRouteTestObjectUrl|',recommendedValues['property_info']['sureRouteTestObjectUrl'])
+        templateFileContent = templateFileContent.replace('|prop.sureRouteCustomMap|',recommendedValues['property_info']['sureRouteCustomMap'])
+
+        templateFileContentJson = json.loads(templateFileContent)
+
+        productId = 'prd_' + recommendedValues['property_setup']['productid']
+        new_property_name = recommendedValues['property_info']['propertyName']
+        hostname = recommendedValues['property_hostnames']['publicHostname']
+        edgeHostname = recommendedValues['property_hostnames']['useEdgehostnameId']
+        papiObject = PapiWrapper(access_hostname)
+
+        rootLogger.info('\nCreating a new property with name: ' + new_property_name)
+        createResponse = papiObject.createConfig(session, new_property_name, productId,contractId=contractId, groupId=groupId)
+        if createResponse.status_code == 201:
+            matchPattern = re.compile('/papi/v0/properties/(.*)(\?.*)')
+            propertyId = matchPattern.match(createResponse.json()['propertyLink']).group(1)
+            rootLogger.info('Property created with propertyId: ' + propertyId)
+
+            #Make a call to create a edgehostname
+            rootLogger.info('\nCreating the Edgehostname: ' + hostname + '.edgesuite.net')
+            createEdgeHostnameResponse = papiObject.createEdgeHostname(session, hostname, productId, contractId, groupId)
+            if createEdgeHostnameResponse.status_code == 201:
+                matchPattern = re.compile('/papi/v0/edgehostnames/(.*)(\?.*)')
+                edgeHostnameId = matchPattern.match(createEdgeHostnameResponse.json()['edgeHostnameLink']).group(1)
+                rootLogger.info('Successfully created edgehostname with Id: ' + edgeHostnameId)
+            else:
+                rootLogger.info('Unable to create edgehostname. Reason is: \n\n' + json.dumps(createEdgeHostnameResponse.json(), indent=4))
+                exit()
+
+            #Make a call to update the hostname in property
+            rootLogger.info('\nUpdating the property with hostname: ' + hostname + ' and the Edgehostname: ' + hostname + '.edgesuite.net')
+            updateHostnameRespose = papiObject.updateHostname(session, hostname, edgeHostnameId,1, propertyId, contractId, groupId)
+            if updateHostnameRespose.status_code == 200:
+                rootLogger.info('Successfully added hostname: '+ hostname + ' to property: ' + new_property_name)
+            else:
+                rootLogger.info('Unable to update hostname in property. Reason is: \n\n' + json.dumps(updateHostnameRespose.json(), indent=4))
+                exit()
+
+            #Make a call to update the rules based on template
+            rootLogger.info('\nUpdating the rules based on the values from template: ' + os.path.join('config','iontemplate_parameters.json'))
+            uploadRulesResponse = papiObject.uploadRules(session=session, updatedData=templateFileContentJson, property_name=new_property_name, version=1, propertyId=propertyId, contractId=contractId, groupId=groupId)
+            if uploadRulesResponse.status_code == 200:
+                rootLogger.info('Updated rules successfully')
+            else:
+                rootLogger.info('Unable to update hostname in property. Reason is: \n\n' + json.dumps(uploadRulesResponse.json(), indent=4))
+                exit()
+
+            #Lets activate on staging
+            rootLogger.info('\nActivating the configuration on akamai staging')
+            emailList = ['vbhat@akamai.com']
+            notes = 'Test activation from PAPI'
+            activateResponse = papiObject.activateConfiguration(session=session, property_name=new_property_name, version=1, network='STAGING', emailList=emailList, notes=notes, propertyId=propertyId, contractId=contractId, groupId=groupId)
+            if activateResponse.status_code == 201:
+                rootLogger.info('Activation successful. Please wait for ~10 minutes')
+                rootLogger.info('You can track activation here: ' + activateResponse.json()['activationLink'])
+            else:
+                rootLogger.info('Unable to activate configuration. Reason is: \n\n' + json.dumps(activateResponse.json(), indent=4))
+                exit()
+
+        else:
+            rootLogger.info('Unable to create property.Exiting. Reason is: \n\n' + json.dumps(createResponse.json(), indent=4))
+            exit()
+    except (NameError, AttributeError, KeyError, FileNotFoundError) as e:
+        rootLogger.info(e)
+        exit()
