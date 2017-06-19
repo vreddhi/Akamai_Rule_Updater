@@ -1,8 +1,8 @@
 '''
-// I dedicate all this code, all my work, to my wife, who will
-// have to support me once it gets released into the public.
-Author: Vreddhi Bhat
-Contact: vbhat@akamai.com
+// Good luck with this code. This leverages akamai OPEN API.
+// In case you need
+// explanation contact the initiators.
+Initiators: vbhat@akamai.com and aetsai@akamai.com
 '''
 
 import json
@@ -230,7 +230,7 @@ class PapiWrapper(object):
             self.final_response = "SUCCESS"
         return createVersionResponse
 
-    def getVersion(self,session,property_name,activeOn="LATEST"):
+    def getVersion(self,session,property_name,activeOn="LATEST",propertyId='optional',contractId='optional',groupId='optional'):
         """
         Function to get the latest or staging or production version
 
@@ -249,7 +249,13 @@ class PapiWrapper(object):
             (VersionResponse) Object with all response details.
         """
 
-        self.getPropertyInfo(session, property_name)
+        if propertyId == 'optional' or groupId == 'optional' or contractId == 'optional':
+            self.getPropertyInfo(session, property_name)
+        else:
+            self.propertyId = propertyId
+            self.groupId = groupId
+            self.contractId = contractId
+            
         if activeOn == "LATEST":
             VersionUrl = 'https://' + self.access_hostname + '/papi/v0/properties/' + self.propertyId + '/versions/latest?contractId=' + self.contractId +'&groupId=' + self.groupId
         elif activeOn == "STAGING":
@@ -259,7 +265,7 @@ class PapiWrapper(object):
         VersionResponse = session.get(VersionUrl)
         return VersionResponse
 
-    def uploadRules(self,session,updatedData,property_name,version):
+    def uploadRules(self,session,updatedData,property_name,version,propertyId='optional',contractId='optional',groupId='optional'):
         """
         Function to upload rules to a property
 
@@ -277,8 +283,13 @@ class PapiWrapper(object):
         updateResponse : updateResponse
             (updateResponse) Object with all response details.
         """
+        if propertyId == 'optional' or groupId == 'optional' or contractId == 'optional':
+            self.getPropertyInfo(session, property_name)
+        else:
+            self.propertyId = propertyId
+            self.groupId = groupId
+            self.contractId = contractId
 
-        self.getPropertyInfo(session, property_name)
         updateurl = 'https://' + self.access_hostname  + '/papi/v0/properties/'+ self.propertyId + "/versions/" + str(version) + '/rules/' + '?contractId=' + self.contractId +'&groupId=' + self.groupId
         updatedData = json.dumps(updatedData)
         updateResponse = session.put(updateurl,data=updatedData,headers=self.headers)
@@ -290,7 +301,7 @@ class PapiWrapper(object):
             self.final_response == "SUCCESS"
         return updateResponse
 
-    def activateConfiguration(self,session,property_name,version,network,emailList,notes):
+    def activateConfiguration(self,session,property_name,version,network,emailList,notes,propertyId='optional',contractId='optional',groupId='optional'):
         """
         Function to activate a configuration or property
 
@@ -303,8 +314,8 @@ class PapiWrapper(object):
         version : <int>
             version number to be activated
         network : <string>
-            network type on which configuration has to be activated on
-        emailList : <string>
+            network type on which configuration has to be activated on (STAGING or PRODUCTION)
+        emailList : <List>
             List of emailIds separated by comma to be notified
         notes : <string>
             Notes that describes the activation reason
@@ -314,18 +325,21 @@ class PapiWrapper(object):
         activationResponse : activationResponse
             (activationResponse) Object with all response details.
         """
+        if propertyId == 'optional' or contractId == 'optional' or groupId == 'optional':
+            self.getPropertyInfo(session, property_name)
+        else:
+            self.propertyId = propertyId
+            self.groupId = groupId
+            self.contractId = contractId
 
-        self.getPropertyInfo(session, property_name)
-        emails = []
-        emails.append(emailList)
-        emails = json.dumps(emails)
+        emails = json.dumps(emailList)
         activationDetails = """
              {
                 "propertyVersion": %s,
                 "network": "%s",
                 "note": "%s",
                 "notifyEmails": %s
-            } """ % (version,network,notes,emails)
+            } """ % (version,network.upper(),notes,emails)
 
         actUrl  = 'https://' + self.access_hostname + '/papi/v0/properties/'+ self.propertyId + '/activations/?contractId=' + self.contractId +'&groupId=' + self.groupId
         activationResponse = session.post(actUrl, data=activationDetails, headers=self.headers)
@@ -333,7 +347,7 @@ class PapiWrapper(object):
             if activationResponse.status_code == 400 and activationResponse.json()['detail'].find('following activation warnings must be acknowledged'):
                 acknowledgeWarnings = []
                 for eachWarning in activationResponse.json()['warnings']:
-                    print("WARNING: " + eachWarning['detail'])
+                    #print("WARNING: " + eachWarning['detail'])
                     acknowledgeWarnings.append(eachWarning['messageId'])
                     acknowledgeWarningsJson = json.dumps(acknowledgeWarnings)
                 print("\nAutomatically acknowledging the warnings.\n")
@@ -345,16 +359,16 @@ class PapiWrapper(object):
                         "note": "%s",
                         "notifyEmails": %s,
                         "acknowledgeWarnings": %s
-                    } """ % (version,network,notes,emails,acknowledgeWarningsJson)
+                    } """ % (version,network.upper(),notes,emails,acknowledgeWarningsJson)
                 print("Please wait while we activate the config for you.. Hold on... \n")
                 updatedactivationResponse = session.post(actUrl,data=updatedactivationDetails,headers=self.headers)
                 if updatedactivationResponse.status_code == 201:
                     print("Here is the activation link, that can be used to track\n")
-                    print(updatedactivationResponse.json()['activationLink'])
+                    #print(updatedactivationResponse.json()['activationLink'])
                     self.final_response = "SUCCESS"
                 else:
                     self.final_response = "FAILURE"
-                    print(updatedactivationResponse.json())
+                    #print(updatedactivationResponse.json())
                 return updatedactivationResponse
             elif activationResponse.status_code == 422 and activationResponse.json()['detail'].find('version already activated'):
                 print("Property version already activated")
@@ -416,6 +430,39 @@ class PapiWrapper(object):
         cloneUrl = 'https://' + self.access_hostname  + '/papi/v0/properties/?contractId=' + self.contractId +'&groupId=' + self.groupId
         cloneResponse = session.post(cloneUrl, data=cloneData, headers=self.headers)
         return cloneResponse
+
+    def createConfig(self,session,new_property_name,productId,contractId='options',groupId='optional'):
+        """
+        Function to create a configuration
+
+        Parameters
+        ----------
+        session : <string>
+            An EdgeGrid Auth akamai session object
+        new_property_name: <string>
+            Destination/New Property or configuration name
+
+        Returns
+        -------
+        createResponse : createResponse
+            (createResponse) Object with all response details.
+        """
+        if contractId == 'optional' or groupId == 'optional':
+            self.getPropertyInfo(session, property_name)
+        else:
+            self.contractId = contractId
+            self.groupId = groupId
+
+        createData = """
+        {
+            "productId"    : "%s",
+            "propertyName" : "%s"
+        }
+        """ % (productId,new_property_name)
+
+        createUrl = 'https://' + self.access_hostname  + '/papi/v0/properties/?contractId=' + self.contractId +'&groupId=' + self.groupId
+        createResponse = session.post(createUrl, data=createData, headers=self.headers)
+        return createResponse
 
     def deleteProperty(self,session,property_name):
         """
@@ -538,6 +585,66 @@ class PapiWrapper(object):
         updateruleTreeResponse = session.put(updateruleTreeUrl,headers=mime_header)
         return updateruleTreeResponse
 
+    def createEdgeHostname(self,session,hostname,productId,contractId,groupId):
+        """
+        Function to update hostname of property
+
+        Parameters
+        ----------
+        session : <string>
+            An EdgeGrid Auth akamai session object
+
+        Returns
+        -------
+        createEdgeHostnameResponse : createEdgeHostnameResponse
+            (createEdgeHostnameResponse) Object with all response details.
+        """
+        self.contractId = contractId
+        self.groupId = groupId
+
+        hostnameData = """
+        {
+            "productId": "%s",
+            "domainPrefix": "%s",
+            "domainSuffix": "edgesuite.net",
+            "ipVersionBehavior": "IPV4"
+        }
+        """ % (productId,hostname)
+        createEdgeHostnameUrl = 'https://' + self.access_hostname + '/papi/v0/edgehostnames/?contractId=' + self.contractId + '&groupId=' + self.groupId
+        createEdgeHostnameResponse = session.post(createEdgeHostnameUrl,data=hostnameData,headers=self.headers)
+        return createEdgeHostnameResponse
+
+    def updateHostname(self,session,hostname,edgeHostnameId,version,propertyId,contractId,groupId):
+        """
+        Function to update hostname of property
+
+        Parameters
+        ----------
+        session : <string>
+            An EdgeGrid Auth akamai session object
+
+        Returns
+        -------
+        updateHostnameResponse : updateHostnameResponse
+            (updateHostnameResponse) Object with all response details.
+        """
+        self.propertyId = propertyId
+        self.contractId = contractId
+        self.groupId = groupId
+
+        hostnameData = """
+        [
+            {
+                "cnameType": "EDGE_HOSTNAME",
+                "cnameFrom": "%s",
+                "edgeHostnameId": "%s"
+            }
+        ]
+        """ % (hostname,edgeHostnameId)
+
+        updateHostnameUrl = 'https://' + self.access_hostname + '/papi/v0/properties/' + self.propertyId + '/versions/' + str(version) + '/hostnames/?contractId=' + self.contractId + '&groupId=' + self.groupId + '&validateHostnames=false'
+        updateHostnameResponse = session.put(updateHostnameUrl,data=hostnameData,headers=self.headers)
+        return updateHostnameResponse
 
     def verifyCreds(self,session):
         """
