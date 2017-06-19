@@ -79,7 +79,7 @@ args = parser.parse_args()
 
 if not args.downloadRule and not args.addRule and not args.replaceRule and not args.property \
     and not args.rule and not args.version and not args.outputFilename and not args.fromFile and not args.insertAfter \
-    and not args.insertBefore and not args.insertLast and not args.ruleName:
+    and not args.insertBefore and not args.insertLast and not args.ruleName and not args.test:
     rootLogger.info("Use -h for help options")
     exit()
 
