@@ -231,7 +231,7 @@ def behaviorsToJson(config, ruleName):
                 behaviorDetails['options'][eachOptionOfBehavior.split('.')[2]] = config[ruleName][eachOptionOfBehavior]
             rulebehaviorList.append(behaviorDetails)
 
-def ConfigToJsonConverter(inputFilename,outputFilename):
+def ConfigToJsonConverter(inputFilename,outputFilename,ruleName,outputRules):
     """
     Function to convert configfile to json content
 
@@ -249,38 +249,51 @@ def ConfigToJsonConverter(inputFilename,outputFilename):
     config.optionxform = str
     config.read(inputFilename)
     ruleNames = config.sections()
-    rules = {}
+
     #Lets start with defult rule
     behaviorPattern = re.compile('behavior\.(.*)')
+    singleRule = {}
+    singleRule['children'] = []
+    singleRule['behaviors'] = []
 
-    if config.has_section('Rule-default'):
-        #Read contents of default rule
-        '''if 'behaviors' in config.options('Rule-default'):
-            behaviors = config['Rule-default']['behaviors'].replace('[','').replace(']','').replace("'",'').replace(",",'').split()
-            print(behaviors)
+    if config.has_section(ruleName):
+        singleRule['name'] = ruleName
+        if 'behaviors' in config.options(ruleName):
+            behaviors = config[ruleName]['behaviors'].replace('[','').replace(']','').replace("'",'').split(',')
+            #print(behaviors)
             rulebehaviorList = []
-            behaviorOptionNames = list(filter(lambda x: behaviorPattern.match(x), config.options('Rule-default')))
+            behaviorOptionNames = list(filter(lambda x: behaviorPattern.match(x), config.options(ruleName)))
+            print(behaviorOptionNames)
             for eachBehavior in behaviors:
                 behaviorDetails = {}
                 behaviorDetails['options'] = {}
                 behaviorDetails['name'] = eachBehavior
-                pattern = re.compile(eachBehavior)
-                behaviorOptions = list(filter(lambda x: eachBehavior in x , behaviorOptionNames))
+                behaviorOptions = list(filter(lambda x: eachBehavior.lower() in x.lower() , behaviorOptionNames))
                 print(eachBehavior +  ' : ' + str(behaviorOptions) + '\n\n')
                 for eachOptionOfBehavior in behaviorOptions:
-                    behaviorDetails['options'][eachOptionOfBehavior.split('.')[2]] = config['Rule-default'][eachOptionOfBehavior]
-                rulebehaviorList.append(behaviorDetails)'''
-            #print(json.dumps(rulebehaviorList, indent=4))
-        behaviorsToJson(config, 'Rule-default')
-        if 'criterias' in config.options('Rule-default'):
-            criterias = config['Rule-default']['criterias']
+                    optionValue = config[ruleName][eachOptionOfBehavior]
+                    if optionValue.isdigit():
+                        optionValue = int(optionValue)
+                    elif optionValue.lower() == 'true':
+                        optionValue = bool(True)
+                    elif optionValue.lower() == 'false':
+                        optionValue = bool(False)
+                    behaviorDetails['options'][eachOptionOfBehavior.split('.')[2]] = optionValue
+                rulebehaviorList.append(behaviorDetails)
+            singleRule['behaviors'] = rulebehaviorList
+        #print(json.dumps(singleRule, indent=4))
 
-        if 'childRules' in config.options('Rule-default'):
-            children = config['Rule-default']['childRules'].replace('[','').replace(']','').replace("'",'').replace(",",'').split()
-            for eachChildRule in children:
-                ruleName = 'Rule-' +eachChildRule
-                behaviorsToJson(config, ruleName)
+
+        if 'childRules' in config.options(ruleName):
+            children = config[ruleName]['childRules'].replace('[','').replace(']','').replace("'",'').split(',')
+            if len(children) > 0:
+                for eachChildRuleName in children:
+                    ruleData = {}
+                    childRuleName = 'Rule-' + eachChildRuleName.strip()
+                    ConfigToJsonConverter(inputFilename, outputFilename, childRuleName, outputRules)
+
+        return singleRule
 
     else:
-        print('default rule is not found. cant proceed to convert')
+        print( ruleName + ' is not found. cant proceed to convert')
         exit()
