@@ -7,6 +7,8 @@ Initiators: vbhat@akamai.com and aetsai@akamai.com
 
 import os
 import json
+import configparser
+import re
 
 #-----------------------------------------------------------#
 #-----Below section contains custom parsing functions-------#
@@ -148,3 +150,137 @@ def insertRule(completeRuleSet,newRuleSet,ruleName='default',whereTo='insertAfte
             completeRuleSet.insert(everyPosition,newRuleSet)
 
     return completeRuleSet
+
+def JsonRulesToPlainText(completeRuleSet,fileName):
+    """
+    Function to fetch json content of rule
+
+    Parameters
+    ----------
+    parentRule : <List>
+        Default parent rule represented as a list
+
+    ruleName: <String>
+        Name of the rule
+
+    Returns
+    -------
+    rule : Json representation of a rule
+    """
+    for eachRule in completeRuleSet:
+        print('\n[Rule-' +eachRule['name'] + ']')
+        with open(fileName,'a') as fileContentHandler:
+            fileContentHandler.write('\n[Rule-' +eachRule['name'] + ']\n')
+        if 'criteria' in eachRule:
+            criteriasList = []
+            criteriasOptionsList = []
+            for eachCriteria in eachRule['criteria']:
+                criteriasList.append(str(eachCriteria['name']))
+            print('criterias = '+ str(criteriasList))
+            with open(fileName,'a') as fileContentHandler:
+                fileContentHandler.write('criterias = '+ str(criteriasList)+'\n')
+            for eachCriteria in eachRule['criteria']:
+                if 'options' in eachCriteria:
+                    for eachOption in eachCriteria['options']:
+                        print('criteria.' + eachCriteria['name'] + '.' + eachOption + ' = ' + str(eachCriteria['options'][eachOption]))
+                        with open(fileName,'a') as fileContentHandler:
+                            fileContentHandler.write('criteria.' + eachCriteria['name'] + '.' + eachOption + ' = ' + str(eachCriteria['options'][eachOption]) + '\n')
+        if 'behaviors' in eachRule:
+            behaviorsList = []
+            behaviorsOptionsList = []
+            for eachbehavior in eachRule['behaviors']:
+                behaviorsList.append(eachbehavior['name'])
+            print('behaviors = '+ str(behaviorsList))
+            with open(fileName,'a') as fileContentHandler:
+                fileContentHandler.write('behaviors = '+ str(behaviorsList) + '\n')
+            for eachbehavior in eachRule['behaviors']:
+                if 'options' in eachbehavior:
+                    for eachOption in eachbehavior['options']:
+                        print('behavior.' + eachbehavior['name'] + '.' + eachOption + ' = ' + str(eachbehavior['options'][eachOption]))
+                        with open(fileName,'a') as fileContentHandler:
+                            fileContentHandler.write('behavior.' + eachbehavior['name'] + '.' + eachOption + ' = ' + str(eachbehavior['options'][eachOption]) + '\n')
+
+        #Check whether we have child rules, where in name can be found
+        if len(eachRule['children']) != 0:
+            childRuleList = []
+            for eachChildRule in eachRule['children']:
+                childRuleList.append(eachChildRule['name'])
+            print('childRules = ' + str(childRuleList))
+            with open(fileName,'a') as fileContentHandler:
+                fileContentHandler.write('childRules = ' + str(childRuleList) + '\n')
+            JsonRulesToPlainText(eachRule['children'],fileName)
+        else:
+            pass
+
+
+def behaviorsToJson(config, ruleName):
+    behaviorPattern = re.compile('behavior\.(.*)')
+    if 'behaviors' in config.options(ruleName):
+        behaviors = config[ruleName]['behaviors'].replace('[','').replace(']','').replace("'",'').replace(",",'').split()
+        print(behaviors)
+        rulebehaviorList = []
+        behaviorOptionNames = list(filter(lambda x: behaviorPattern.match(x), config.options(ruleName)))
+        for eachBehavior in behaviors:
+            behaviorDetails = {}
+            behaviorDetails['options'] = {}
+            behaviorDetails['name'] = eachBehavior
+            pattern = re.compile(eachBehavior)
+            behaviorOptions = list(filter(lambda x: eachBehavior in x , behaviorOptionNames))
+            print(eachBehavior +  ' : ' + str(behaviorOptions) + '\n\n')
+            for eachOptionOfBehavior in behaviorOptions:
+                behaviorDetails['options'][eachOptionOfBehavior.split('.')[2]] = config[ruleName][eachOptionOfBehavior]
+            rulebehaviorList.append(behaviorDetails)
+
+def ConfigToJsonConverter(inputFilename,outputFilename):
+    """
+    Function to convert configfile to json content
+
+    Parameters
+    ----------
+
+
+    Returns
+    -------
+    rule : Json representation of a rule
+    """
+
+    config = configparser.ConfigParser()
+    #Make the parser case-sensitive
+    config.optionxform = str
+    config.read(inputFilename)
+    ruleNames = config.sections()
+    rules = {}
+    #Lets start with defult rule
+    behaviorPattern = re.compile('behavior\.(.*)')
+
+    if config.has_section('Rule-default'):
+        #Read contents of default rule
+        '''if 'behaviors' in config.options('Rule-default'):
+            behaviors = config['Rule-default']['behaviors'].replace('[','').replace(']','').replace("'",'').replace(",",'').split()
+            print(behaviors)
+            rulebehaviorList = []
+            behaviorOptionNames = list(filter(lambda x: behaviorPattern.match(x), config.options('Rule-default')))
+            for eachBehavior in behaviors:
+                behaviorDetails = {}
+                behaviorDetails['options'] = {}
+                behaviorDetails['name'] = eachBehavior
+                pattern = re.compile(eachBehavior)
+                behaviorOptions = list(filter(lambda x: eachBehavior in x , behaviorOptionNames))
+                print(eachBehavior +  ' : ' + str(behaviorOptions) + '\n\n')
+                for eachOptionOfBehavior in behaviorOptions:
+                    behaviorDetails['options'][eachOptionOfBehavior.split('.')[2]] = config['Rule-default'][eachOptionOfBehavior]
+                rulebehaviorList.append(behaviorDetails)'''
+            #print(json.dumps(rulebehaviorList, indent=4))
+        behaviorsToJson(config, 'Rule-default')
+        if 'criterias' in config.options('Rule-default'):
+            criterias = config['Rule-default']['criterias']
+
+        if 'childRules' in config.options('Rule-default'):
+            children = config['Rule-default']['childRules'].replace('[','').replace(']','').replace("'",'').replace(",",'').split()
+            for eachChildRule in children:
+                ruleName = 'Rule-' +eachChildRule
+                behaviorsToJson(config, ruleName)
+
+    else:
+        print('default rule is not found. cant proceed to convert')
+        exit()
