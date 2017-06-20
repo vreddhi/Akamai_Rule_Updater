@@ -99,18 +99,18 @@ if args.downloadRule:
     propertyDetails = helper.getPropertyDetailsFromLocalStore(args.property)
     #Check if it not an empty response
     if propertyDetails:
-        rootLogger.info('PropertyDetails are found: ')
-        rootLogger.info('Property ID: ' + propertyDetails['propertyId'])
-        rootLogger.info('Contract ID: ' + propertyDetails['contractId'])
-        rootLogger.info('Group ID: ' + propertyDetails['groupId'] + '\n')
+        rootLogger.info('Found Property Details: ')
+        rootLogger.info('contractId: ' + propertyDetails['contractId'])
+        rootLogger.info('groupId: ' + propertyDetails['groupId'] )
+        rootLogger.info('propertyId: ' + propertyDetails['propertyId']+ '\n')
         pass
     else:
-        rootLogger.info('Property details were not found. Try running setup again, or doublecheck property name\n')
+        rootLogger.info('Property details were not found. Try running setup again, or double check property name\n')
         exit()
 
     #Fetch the latest version if need be
-    rootLogger.info('Fetching the version related information.')
-    if args.version.upper() == 'latest'.upper() or args.version.upper() == 'staging'.upper() or args.version.upper() == 'production'.upper():
+    rootLogger.info('Fetching version ' + args.version + ' ...')
+    if args.version.upper() == 'latest'.upper():
         versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn=args.version.upper(), propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
         version = versionResponse.json()['versions']['items'][0]['propertyVersion']
     else:
@@ -125,7 +125,8 @@ if args.downloadRule:
 
     #Let us now move towards rules
     #All rules are saved in samplerules folder, filename is configurable
-    rootLogger.info('Downloading the property rules.')
+    rootLogger.info('Fetching property rules...')
+    rootLogger.info('Searching for Rule: ' + args.ruleName + '\n')
     ruleName = args.ruleName
     if not os.path.exists(os.path.join('samplerules')):
         os.mkdir(os.path.join('samplerules'))
@@ -134,17 +135,17 @@ if args.downloadRule:
     if args.outputFilename:
         filename = args.outputFilename
     else:
-        filename = args.property + '_' + args.ruleName + '.json'
+        filename = args.property + '_v' + version + '_' + args.ruleName + '.json'
 
     propertyContent = papiObject.getPropertyRulesfromPropertyId(session, propertyDetails['propertyId'], version, propertyDetails['contractId'], propertyDetails['groupId'])
     jsonRule = helper.getRule([propertyContent.json()['rules']], args.ruleName)
     if jsonRule:
-        rootLogger.info('Rule was found.')
+        rootLogger.info('Found rule...')
         with open(os.path.join('samplerules',filename),'w') as rulesFileHandler:
             rulesFileHandler.write(json.dumps(jsonRule, indent=4))
-            rootLogger.info('Rules are saved in: ' + os.path.join('samplerules',filename))
+            rootLogger.info('Rule file is saved in: ' + os.path.join('samplerules',filename))
     else:
-        rootLogger.info('Rule with rule name: ' + args.ruleName + ' is not found')
+        rootLogger.info('Rule: ' + args.ruleName + ' is not found.')
         exit()
 
 if args.addRule or args.replaceRule:
@@ -187,18 +188,18 @@ if args.addRule or args.replaceRule:
     propertyDetails = helper.getPropertyDetailsFromLocalStore(args.property)
     #Check if it not an empty response
     if propertyDetails:
-        rootLogger.info('PropertyDetails are found: ')
-        rootLogger.info('Property ID: ' + propertyDetails['propertyId'])
-        rootLogger.info('Contract ID: ' + propertyDetails['contractId'])
-        rootLogger.info('Group ID: ' + propertyDetails['groupId'] + '\n')
+        rootLogger.info('Found Property Details:')
+        rootLogger.info('contractId: ' + propertyDetails['contractId'])
+        rootLogger.info('groupId: ' + propertyDetails['groupId'] )
+        rootLogger.info('propertyId: ' + propertyDetails['propertyId']+ '\n')
         pass
     else:
-        rootLogger.info('Property details were not found. Try running setup again, or doublecheck property name\n')
+        rootLogger.info('Property details were not found. Try running setup again, or double check property name\n')
         exit()
 
     #Fetch the latest version if need be
-    rootLogger.info('Fetching the version related information.')
-    if args.version.upper() == 'latest'.upper() or args.version.upper() == 'staging'.upper() or args.version.upper() == 'production'.upper():
+    rootLogger.info('Fetching version ' + args.version + ' ...')
+    if args.version.upper() == 'latest'.upper():
         versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn=args.version.upper(), propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
         version = versionResponse.json()['versions']['items'][0]['propertyVersion']
     else:
@@ -213,13 +214,13 @@ if args.addRule or args.replaceRule:
 
     #Let us now move towards rules
     #All rules are saved in samplerules folder, filename is configurable
-    rootLogger.info('Downloading the property rules.')
+    rootLogger.info('Fetching existing property rules...')
     propertyContent = papiObject.getPropertyRulesfromPropertyId(session, propertyDetails['propertyId'], version, propertyDetails['contractId'], propertyDetails['groupId'])
     completePropertyJson = propertyContent.json()
     with open(os.path.join('samplerules',args.fromFile),'r') as rulesFileHandler:
         newRuleSet = json.loads(rulesFileHandler.read())
 
-    rootLogger.info('\nUpdating the rules with new rule.')
+    rootLogger.info('\nFound rule file: ' + args.fromFile)
     updatedCompleteRuleSet = helper.insertRule([completePropertyJson['rules']], newRuleSet, args.ruleName, whereTo)
     #rootLogger.info(json.dumps(updatedCompleteRuleSet))
 
@@ -234,21 +235,21 @@ if args.addRule or args.replaceRule:
         completePropertyJson['comments'] = 'Inserting Rule: ' + newRuleSet['name'] + ', ' + comment + ' the rule ' + args.ruleName
 
     #Let us now create a version
-    rootLogger.info('\nCreating a new version of property based on version: ' + str(version))
+    rootLogger.info('Trying to create a new version of this property based on version ' + str(version))
     versionResponse = papiObject.createVersion(session, baseVersion=version, property_name=args.property)
     if versionResponse.status_code == 201:
         #Extract the version number
         matchPattern = re.compile('/papi/v0/properties/prp_.*/versions/(.*)(\?.*)')
         newVersion = matchPattern.match(versionResponse.json()['versionLink']).group(1)
-        rootLogger.info('Version: ' + str(newVersion) + ' created.')
+        rootLogger.info('Successfully created new property version: v' + str(newVersion))
         #Make a call to update the rules
-        rootLogger.info('\nUploading the rules.')
+        rootLogger.info('\nNow trying to upload the new ruleset...')
         uploadRulesResponse = papiObject.uploadRules(session=session, updatedData=json.loads(json.dumps(completePropertyJson)),\
          property_name=args.property, version=newVersion, propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
         if uploadRulesResponse.status_code == 200:
-            rootLogger.info('Updated rules successfully')
+            rootLogger.info('Success!')
         else:
-            rootLogger.info('Unable to update hostname in property. Reason is: \n\n' + json.dumps(uploadRulesResponse.json(), indent=4))
+            rootLogger.info('Unable to update rules in property. Reason is: \n\n' + json.dumps(uploadRulesResponse.json(), indent=4))
             exit()
     else:
         rootLogger.info('Unable to create a new version.')
