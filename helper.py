@@ -79,7 +79,7 @@ def getPropertyDetailsFromLocalStore(PropertyName):
     #Default return of empty dict
     return {}
 
-def getRule(parentRule,ruleName):
+def getAllRules(parentRule,allruleNames=[]):
     """
     Function to fetch json content of rule
 
@@ -95,18 +95,49 @@ def getRule(parentRule,ruleName):
     -------
     rule : Json representation of a rule
     """
-    ruleContent = {}
+    #Initialize ruleContent only if its empty
+    if not len(allruleNames):
+        allruleNames = []
+    for eachRule in parentRule:
+        allruleNames.append(eachRule['name'])
+        #Check whether we have child rules, where in again behavior might be found
+        if len(eachRule['children']) != 0:
+            allruleNames = getAllRules(eachRule['children'], allruleNames)
+
+    #Default return of empty dict
+    return allruleNames
+
+def getRule(parentRule,ruleName,ruleContent={}):
+    """
+    Function to fetch json content of rule
+
+    Parameters
+    ----------
+    parentRule : <List>
+        Default parent rule represented as a list
+
+    ruleName: <String>
+        Name of the rule
+
+    Returns
+    -------
+    rule : Json representation of a rule
+    """
+    #Initialize ruleContent only if its empty
+    if not bool(ruleContent):
+        ruleContent = {}
     for eachRule in parentRule:
         if eachRule['name'] == ruleName:
             return eachRule
         else:
             #Check whether we have child rules, where in again behavior might be found
             if len(eachRule['children']) != 0:
-                ruleContent = getRule(eachRule['children'],ruleName)
+                ruleContent = getRule(eachRule['children'],ruleName, ruleContent)
 
     #Default return of empty dict
     return ruleContent
 
+occurances = 0
 def insertRule(completeRuleSet,newRuleSet,ruleName='default',whereTo='insertAfter'):
     """
     Function to fetch json content of rule
@@ -123,6 +154,8 @@ def insertRule(completeRuleSet,newRuleSet,ruleName='default',whereTo='insertAfte
     -------
     rule : Json representation of a rule
     """
+    #global variable to preserve count across recursive calls
+    global occurances
     if ruleName == 'default':
         for everyRule in completeRuleSet:
             everyRule['children'].append(newRuleSet)
@@ -139,6 +172,7 @@ def insertRule(completeRuleSet,newRuleSet,ruleName='default',whereTo='insertAfte
                 #Append the position/index. This is needed to handle multipl
                 #rules with same name.
                 positionsList.append(position)
+                occurances += 1
             else:
                 #Check whether we have child rules, where in name can be found
                 if len(eachRule['children']) != 0:
@@ -146,10 +180,14 @@ def insertRule(completeRuleSet,newRuleSet,ruleName='default',whereTo='insertAfte
 
         #Recursion is fun. This code executes in reverse order from stack
         #This is the place where rule insertion happens
-        for everyPosition in positionsList:
-            completeRuleSet.insert(everyPosition,newRuleSet)
+        if whereTo != 'replace':
+            for everyPosition in positionsList:
+                completeRuleSet.insert(everyPosition,newRuleSet)
+        else:
+            for everyPosition in positionsList:
+                completeRuleSet[everyPosition] = newRuleSet
 
-    return completeRuleSet
+    return { 'completeRuleSet' : completeRuleSet, 'occurances' : occurances }
 
 def JsonRulesToPlainText(completeRuleSet,fileName):
     """
