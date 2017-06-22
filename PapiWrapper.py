@@ -126,6 +126,45 @@ class PapiWrapper(object):
             self.final_response = "FAILURE"
         return groupResponse
 
+    def searchProperty(self,session,propertyName='optional',hostname='optional',edgeHostname='optional'):
+        """
+        Function to fetch property ID
+
+        Parameters
+        ----------
+        session : <string>
+            An EdgeGrid Auth akamai session object
+
+        Returns
+        -------
+        searchResponse : searchResponse
+            (searchResponse) Object with all response details.
+        """
+
+        searchUrl = 'https://' + self.access_hostname + '/papi/v0/search/find-by-value'
+        if propertyName != 'optional':
+            seachTag = 'propertyName'
+            searchValue = propertyName
+        elif hostname != 'optional':
+            seachTag = 'hostname'
+            searchValue = hostname
+        if edgeHostname != 'optional':
+            seachTag = 'edgeHostname'
+            searchValue = edgeHostname
+
+        searchData = """
+        {
+            "%s": "%s"
+        } """ % (seachTag,searchValue)
+
+        searchResponse = session.post(searchUrl, data=searchData,headers=self.headers)
+        if searchResponse.status_code == 200:
+            self.final_response = "SUCCESS"
+        else:
+            self.final_response = "FAILURE"
+
+        return searchResponse
+
     def getAllProperties(self,session,contractId,groupId):
         """
         Function to fetch list of all properties under the group
@@ -255,13 +294,41 @@ class PapiWrapper(object):
             self.propertyId = propertyId
             self.groupId = groupId
             self.contractId = contractId
-            
+
         if activeOn == "LATEST":
             VersionUrl = 'https://' + self.access_hostname + '/papi/v0/properties/' + self.propertyId + '/versions/latest?contractId=' + self.contractId +'&groupId=' + self.groupId
         elif activeOn == "STAGING":
             VersionUrl = 'https://' + self.access_hostname + '/papi/v0/properties/' + self.propertyId + '/versions/latest?contractId=' + self.contractId +'&groupId=' + self.groupId + '&activatedOn=STAGING'
         elif activeOn == "PRODUCTION":
             VersionUrl = 'https://' + self.access_hostname + '/papi/v0/properties/' + self.propertyId + '/versions/latest?contractId=' + self.contractId +'&groupId=' + self.groupId + '&activatedOn=PRODUCTION'
+        VersionResponse = session.get(VersionUrl)
+        return VersionResponse
+
+    def listVersions(self,session,property_name,propertyId='optional',contractId='optional',groupId='optional'):
+        """
+        Function to list all versions of a property
+
+        Parameters
+        ----------
+        session : <string>
+            An EdgeGrid Auth akamai session object
+        property_name: <string>
+            Property or configuration name
+
+        Returns
+        -------
+        VersionResponse : VersionResponse
+            (VersionResponse) Object with all response details.
+        """
+
+        if propertyId == 'optional' or groupId == 'optional' or contractId == 'optional':
+            self.getPropertyInfo(session, property_name)
+        else:
+            self.propertyId = propertyId
+            self.groupId = groupId
+            self.contractId = contractId
+
+        VersionUrl = 'https://' + self.access_hostname + '/papi/v1/properties/' + self.propertyId + '/versions/?contractId=' + self.contractId +'&groupId=' + self.groupId 
         VersionResponse = session.get(VersionUrl)
         return VersionResponse
 
