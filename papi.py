@@ -16,6 +16,7 @@ import logging
 import re
 import ast
 import shutil
+import helper
 
 #Setup logging
 if not os.path.exists('logs'):
@@ -63,10 +64,18 @@ parser.add_argument("-create",help="Create a property",action="store_true")
 
 parser.add_argument("-debug",help="DEBUG mode to generate additional logs for troubleshooting",action="store_true")
 
+#Activate related arguments
+parser.add_argument("-activate",help="Activate a given version",action="store_true")
+parser.add_argument("-property",help="Enter property name")
+parser.add_argument("-version",help="version number of property")
+parser.add_argument("-network",help="Network to be activated on. Allowed values are staging and prod or production (case-sensitive)")
+parser.add_argument("-email",help="Enter valid email addresses separated by commas")
+parser.add_argument("-notes",help="Enter notes related to changes you made starting with quotes")
+
 args = parser.parse_args()
 
 
-if not args.setup and not args.create:
+if not args.setup and not args.create and not args.activate:
     rootLogger.info("Use -h for help options")
     exit()
 
@@ -315,3 +324,72 @@ if args.create:
     except (NameError, AttributeError, KeyError, FileNotFoundError) as e:
         rootLogger.info(e)
         exit()
+
+#Property Activation Code
+if args.activate:
+    if not os.path.exists('setup'):
+        rootLogger.info('Please run -setup before activating a config')
+        exit()
+
+    if not args.property:
+        rootLogger.info('Please enter property name using -propertyName option.')
+        exit()
+    propertyName = args.property
+
+    if not args.version:
+        rootLogger.info('Please enter property version using -version option.')
+        exit()
+    version = args.version
+
+    if not args.network:
+        rootLogger.info('Please enter network using -network option.')
+        exit()
+    network = args.network
+
+    if not args.email:
+        rootLogger.info('Please enter valid email addresses using -email option.')
+        exit()
+    emailList = args.email.split(',')
+    #print ("Email id is",emailList)
+
+#Making notes optional
+    if args.notes:
+        notes = args.notes
+    else:
+        notes = ''
+    #print ("Notes are",notes)
+
+
+
+    #Find the property details (IDs)
+    propertyDetails = helper.getPropertyDetailsFromLocalStore(args.property)
+    #Check if it not an empty response
+    if propertyDetails:
+        rootLogger.info('PropertyDetails are found: ')
+        #rootLogger.info('Property ID: ' + propertyDetails['propertyId'])
+        #rootLogger.info('Contract ID: ' + propertyDetails['contractId'])
+        #rootLogger.info('Group ID: ' + propertyDetails['groupId'] + '\n')
+
+        propertyId = propertyDetails['propertyId']
+        contractId = propertyDetails['contractId']
+        groupId    = propertyDetails['groupId']
+
+        pass
+    else:
+        rootLogger.info('Property details were not found. Try running setup again, or doublecheck property name\n')
+        exit()
+
+     #Lets activate on staging
+    
+    rootLogger.info('\nActivating the configuration on akamai')
+    #emailList = ['bdutia@akamai.com']
+    #notes = ''  
+
+    papiObject = PapiWrapper(access_hostname)
+    activateResponse = papiObject.activateConfiguration(session=session, property_name=args.property, version=version, network=args.network, emailList=emailList, notes=notes, propertyId=propertyId, contractId=contractId, groupId=groupId)
+    if activateResponse.status_code == 201:
+        rootLogger.info('Activation successful. Please wait for ~10 minutes')
+        rootLogger.info('You can track activation here: ' + activateResponse.json()['activationLink'])
+    else:
+        rootLogger.info('Unable to activate configuration. Reason is: \n\n' + json.dumps(activateResponse.json(), indent=4))
+        exit()        
