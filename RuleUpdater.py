@@ -147,11 +147,14 @@ if args.downloadRule:
     filename = filename.translate ({ord(c): "_" for c in " !@#$%^&*()[]{};:,/<>?\|`~-=_+"})
     propertyContent = papiObject.getPropertyRulesfromPropertyId(session, propertyDetails['propertyId'], version, propertyDetails['contractId'], propertyDetails['groupId'])
     if propertyContent.status_code == 200:
-        jsonRule = helper.getRule([propertyContent.json()['rules']], args.ruleName)
-        if jsonRule:
+        jsonRuleAndCount = helper.getRule([propertyContent.json()['rules']], args.ruleName)
+        if jsonRuleAndCount['ruleCount'] > 1:
+            rootLogger.info('\nMultiple Rules named: "' + args.ruleName + '" exist, please check configuration\n')
+            exit()
+        elif jsonRuleAndCount['ruleCount'] == 1:
             rootLogger.info('Found rule...')
             with open(os.path.join('samplerules',filename),'w') as rulesFileHandler:
-                rulesFileHandler.write(json.dumps(jsonRule, indent=4))
+                rulesFileHandler.write(json.dumps(jsonRuleAndCount['ruleContent'], indent=4))
                 rootLogger.info('Rule file is saved in: ' + os.path.join('samplerules',filename))
         else:
             rootLogger.info('Rule: ' + args.ruleName + ' is not found.')
