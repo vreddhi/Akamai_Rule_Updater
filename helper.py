@@ -79,7 +79,7 @@ def getPropertyDetailsFromLocalStore(PropertyName):
     #Default return of empty dict
     return {}
 
-def getAllRules(parentRule,allruleNames=[]):
+def getAllRules(parentRule,allruleNames=[],isChild='optional',parentRuleName='optional'):
     """
     Function to fetch json content of rule
 
@@ -99,10 +99,13 @@ def getAllRules(parentRule,allruleNames=[]):
     if not len(allruleNames):
         allruleNames = []
     for eachRule in parentRule:
-        allruleNames.append(eachRule['name'])
+        if isChild != 'optional' and parentRuleName != 'default':
+            allruleNames.append(' ' + parentRuleName + '  -->  ' + eachRule['name'])
+        else:
+            allruleNames.append('\n ' + eachRule['name'])
         #Check whether we have child rules, where in again behavior might be found
         if len(eachRule['children']) != 0:
-            allruleNames = getAllRules(eachRule['children'], allruleNames)
+            allruleNames = getAllRules(eachRule['children'], allruleNames, isChild='yes',parentRuleName = eachRule['name'])
 
     #Default return of empty dict
     return allruleNames
