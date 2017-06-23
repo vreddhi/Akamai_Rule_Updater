@@ -122,10 +122,10 @@ if args.downloadRule:
         versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn='LATEST', propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
         latestversion = versionResponse.json()['versions']['items'][0]['propertyVersion']
         if int(args.version) > int(latestversion):
-            rootLogger.info('Please check the version number. The highest/latest version is: ' + str(latestversion) + '\n')
+            rootLogger.info('Please check the version number. The latest version is: ' + str(latestversion) + '\n')
             exit()
         else:
-            rootLogger.info('Version is validated.\n')
+            rootLogger.info('Found version...\n')
 
     #Let us now move towards rules
     #All rules are saved in samplerules folder, filename is configurable
@@ -227,7 +227,7 @@ if args.addRule or args.replaceRule:
             rootLogger.info('Please check the version number. The highest/latest version is: ' + str(latestversion) + '\n')
             exit()
         else:
-            rootLogger.info('Version is validated.\n')
+            rootLogger.info('Found Version...\n')
 
     #Let us now move towards rules
     #All rules are saved in samplerules folder, filename is configurable
@@ -247,7 +247,8 @@ if args.addRule or args.replaceRule:
             #Check whether we found multiple rule names, if yes warn the user
             decision = 'Y'
             if updatedCompleteRuleSet['occurances'] > 1:
-                rootLogger.info('\nWe found ' + str(updatedCompleteRuleSet['occurances']) + ' occurances of the rule' +'. Press Y to continue or any other key to exit')
+                rootLogger.info('\nFound ' + str(updatedCompleteRuleSet['occurances']) + ' occurences of the rule: "' + args.ruleName + '"')
+                rootLogger.info('Press Y to continue and replace or any other key to exit')
                 decision = input()
 
             if decision == 'Y' or decision == 'y':
@@ -255,7 +256,7 @@ if args.addRule or args.replaceRule:
                 completePropertyJson['rules'] = updatedCompleteRuleSet['completeRuleSet'][0]
                 #Updating the property comments
                 if args.replaceRule:
-                    completePropertyJson['comments'] = 'Created from v' + str(version) + ': replacing existing rule ' + args.ruleName + ' with '+ newRuleSet['name']
+                    completePropertyJson['comments'] = 'Created from v' + str(version) + ': replacing existing rule "' + args.ruleName + '" with rule from: '+ args.fromFile
                 elif comment == 'at the end':
                     completePropertyJson['comments'] = 'Created from v' + str(version) + ': adding rule ' + newRuleSet['name'] + ' ' + comment + ' ' + args.ruleName
                 else:
@@ -284,7 +285,9 @@ if args.addRule or args.replaceRule:
             else:
                 rootLogger.info('Exiting the program without any changes to configuration.')
         else:
-            rootLogger.info('\nUnable to find the rule specified in -ruleName. Exiting.')
+            rootLogger.info('\nUnable to find rule: "' + args.ruleName + '" in this property.')
+            rootLogger.info('Check the -rulename value or run -getDetail to list existing rules for this property.')
+            rootLogger.info('Exiting...')
             exit()
     else:
         rootLogger.info('Unable to fecth property rules.')
@@ -310,12 +313,11 @@ if args.getDetail:
         rootLogger.info('Property details were not found. Try running setup again, or double check property name\n')
         exit()
 
-    rootLogger.info('Fetching property versions.\n')
+    rootLogger.info('Fetching property versions...\n')
     versionsResponse = papiObject.listVersions(session, property_name=args.property, propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
     if versionsResponse.status_code == 200:
-        rootLogger.info('Property Details:')
-        rootLogger.info('----------------')
-        rootLogger.info('Property Description:\n')
+        rootLogger.info('Current Property Details:')
+        rootLogger.info('----------------------------------')
         #rootLogger.info(json.dumps(versionsResponse.json(), indent=4))
         latestVersion = 0
         stagingVersion = 0
@@ -335,7 +337,7 @@ if args.getDetail:
                 productionVersion = everyVersionDetail['propertyVersion']
                 if 'note' in everyVersionDetail:
                     productionNote = everyVersionDetail['note']
-        rootLogger.info('Latest version is: ' + str(latestVersion))
+        rootLogger.info('Latest version: v' + str(latestVersion))
         if stagingVersion != 0:
             rootLogger.info('Version ' + str(stagingVersion) + ' is live in staging')
         if stagingVersion == 0:
@@ -344,10 +346,10 @@ if args.getDetail:
             rootLogger.info('Version ' + str(productionVersion) + ' is live in production')
         if productionVersion == 0:
             rootLogger.info('No version is active in production')
-        rootLogger.info('Version ' + str(latestVersion) + ' is the latest version')
+        #rootLogger.info('Version ' + str(latestVersion) + ' is the latest version')
 
-        rootLogger.info('\nDetails of last 10 versions\n')
-        rootLogger.info('Version Details (Version : Description)')
+        #comment this out for now? rootLogger.info('\nLast 10 versions...\n')
+        rootLogger.info('\nVersion Details (Version : Description)')
         rootLogger.info('----------------------------------')
         startRange = 0
         endRange = 10
