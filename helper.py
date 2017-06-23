@@ -107,6 +107,7 @@ def getAllRules(parentRule,allruleNames=[]):
     #Default return of empty dict
     return allruleNames
 
+ruleCount = 0
 def getRule(parentRule,ruleName,ruleContent={}):
     """
     Function to fetch json content of rule
@@ -124,10 +125,13 @@ def getRule(parentRule,ruleName,ruleContent={}):
     rule : Json representation of a rule
     """
     #Initialize ruleContent only if its empty
+    global ruleCount
     if not bool(ruleContent):
         ruleContent = {}
     for eachRule in parentRule:
         if eachRule['name'] == ruleName:
+            print('Found')
+            ruleCount += 1
             return eachRule
         else:
             #Check whether we have child rules, where in again behavior might be found
@@ -135,7 +139,7 @@ def getRule(parentRule,ruleName,ruleContent={}):
                 ruleContent = getRule(eachRule['children'],ruleName, ruleContent)
 
     #Default return of empty dict
-    return ruleContent
+    return { 'ruleContent': ruleContent, 'ruleCount': ruleCount }
 
 occurances = 0
 def insertRule(completeRuleSet,newRuleSet,ruleName='default',whereTo='insertAfter'):
@@ -159,6 +163,7 @@ def insertRule(completeRuleSet,newRuleSet,ruleName='default',whereTo='insertAfte
     if ruleName == 'default':
         for everyRule in completeRuleSet:
             everyRule['children'].append(newRuleSet)
+        occurances += 1
     else:
         positionsList = []
         for index, eachRule in enumerate(completeRuleSet):
