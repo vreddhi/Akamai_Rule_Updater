@@ -258,11 +258,11 @@ if args.addRule or args.replaceRule:
                 completePropertyJson['rules'] = updatedCompleteRuleSet['completeRuleSet'][0]
                 #Updating the property comments
                 if args.replaceRule:
-                    completePropertyJson['comments'] = 'Created from v' + str(version) + ': replacing existing rule "' + args.ruleName + '" with rule from: '+ args.fromFile
+                    completePropertyJson['comments'] = 'Created from v' + str(version) + ': replaced existing rule "' + args.ruleName + '" with rule from: '+ args.fromFile
                 elif comment == 'at the end':
-                    completePropertyJson['comments'] = 'Created from v' + str(version) + ': adding rule ' + newRuleSet['name'] + ' ' + comment
+                    completePropertyJson['comments'] = 'Created from v' + str(version) + ': added rule ' + newRuleSet['name'] + ' ' + comment
                 else:
-                    completePropertyJson['comments'] = 'Created from v' + str(version) + ': adding rule ' + newRuleSet['name'] + ' '+ comment + ' ' + args.ruleName + ' rule'
+                    completePropertyJson['comments'] = 'Created from v' + str(version) + ': added rule ' + newRuleSet['name'] + ' '+ comment + ' ' + args.ruleName + ' rule'
 
                 #Let us now create a version
                 rootLogger.info('Trying to create a new version of this property based on version ' + str(version))
