@@ -189,7 +189,7 @@ if args.addRule or args.replaceRule:
 
         if args.insertAfter or args.insertBefore:
             if not args.ruleName:
-                rootLogger.info('\nPlease enter the ruleName using -ruleName.\n')
+                rootLogger.info('\nPlease enter the rule name using -ruleName.\n')
                 exit()
             if args.insertAfter:
                 whereTo = 'insertAfter'
@@ -206,7 +206,7 @@ if args.addRule or args.replaceRule:
     if args.replaceRule:
         whereTo = 'replace'
         if not args.ruleName:
-            rootLogger.info('\nPlease enter the rule name to be replaced using –ruleName.\n')
+            rootLogger.info('\nPlease enter the rule name to be replaced using -ruleName.\n')
             exit()
 
     version = args.fromVersion
@@ -285,7 +285,7 @@ if args.addRule or args.replaceRule:
                     rootLogger.info('Unable to create a new version.')
                     exit()
             else:
-                rootLogger.info('\nFound ' + str(updatedCompleteRuleSet['occurances']) + ' occurrences of the rule: "' + args.ruleName + '"' + '. Exiting...')
+                rootLogger.info('\nError: Found ' + str(updatedCompleteRuleSet['occurances']) + ' occurrences of the rule: "' + args.ruleName + '"' + '. Please check configuration. Exiting...')
         else:
             rootLogger.info('\nUnable to find rule: "' + args.ruleName + '" in this property.')
             rootLogger.info('Check the -rulename value or run -getDetail to list existing rules for this property.')
