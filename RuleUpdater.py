@@ -262,7 +262,7 @@ if args.addRule or args.replaceRule:
                 elif comment == 'at the end':
                     completePropertyJson['comments'] = 'Created from v' + str(version) + ': adding rule ' + newRuleSet['name'] + ' ' + comment
                 else:
-                    completePropertyJson['comments'] = 'Created from v' + str(version) + ': adding rule ' + newRuleSet['name'] + ' '+ comment + ' ' + args.ruleName
+                    completePropertyJson['comments'] = 'Created from v' + str(version) + ': adding rule ' + newRuleSet['name'] + ' '+ comment + ' ' + args.ruleName + ' rule'
 
                 #Let us now create a version
                 rootLogger.info('Trying to create a new version of this property based on version ' + str(version))
