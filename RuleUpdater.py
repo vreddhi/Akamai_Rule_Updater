@@ -157,7 +157,7 @@ if args.downloadRule:
                 rulesFileHandler.write(json.dumps(jsonRuleAndCount['ruleContent'], indent=4))
                 rootLogger.info('Rule file is saved in: ' + os.path.join('samplerules',filename))
         else:
-            rootLogger.info('Rule: ' + args.ruleName + ' is not found.')
+            rootLogger.info('Rule: ' + args.ruleName + ' is not found. Please check configuration.')
             exit()
     else:
         rootLogger.info('Unable to fecth property rules.')
@@ -169,7 +169,7 @@ if args.addRule or args.replaceRule:
         rootLogger.info('\nPlease enter property name using -property.')
         exit()
     if not args.fromVersion:
-        rootLogger.info('\nPlease enter the version using -fromVersion.')
+        rootLogger.info('\nPlease enter the version to create from using -fromVersion.')
         exit()
     if not args.fromFile:
         rootLogger.info('\nPlease enter the filename containing rule(s) using -fromFile.')
@@ -405,9 +405,9 @@ if args.listRules:
             rootLogger.info('Please check the version number. The highest/latest version is: ' + str(latestversion) + '\n')
             exit()
         else:
-            rootLogger.info('Version is validated.\n')
+            rootLogger.info('Found version...\n')
 
-    rootLogger.info('Fetching rules of property.\n')
+    rootLogger.info('Fetching property rules...\n')
     propertyContent = papiObject.getPropertyRulesfromPropertyId(session, propertyDetails['propertyId'], args.version, propertyDetails['contractId'], propertyDetails['groupId'])
     if propertyContent.status_code == 200:
         rules = helper.getAllRules([propertyContent.json()['rules']], allruleNames=[])
