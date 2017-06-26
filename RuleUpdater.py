@@ -228,6 +228,7 @@ if args.addRule or args.replaceRule:
     if version.upper() == 'latest'.upper():
         versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn=version.upper(), propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
         version = versionResponse.json()['versions']['items'][0]['propertyVersion']
+        rootLogger.info('Latest version is: v' + str(version) + '\n')
     else:
         #Validate the version number entered using -fromVersion
         versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn='LATEST', propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
@@ -258,11 +259,11 @@ if args.addRule or args.replaceRule:
                 completePropertyJson['rules'] = updatedCompleteRuleSet['completeRuleSet'][0]
                 #Updating the property comments
                 if args.replaceRule:
-                    completePropertyJson['comments'] = 'Created from v' + str(version) + ': replaced existing rule "' + args.ruleName + '" with rule from: '+ args.fromFile
+                    finalComment = completePropertyJson['comments'] = 'Created from v' + str(version) + ': replaced existing rule "' + args.ruleName + '" with rule from: '+ args.fromFile
                 elif comment == 'at the end':
-                    completePropertyJson['comments'] = 'Created from v' + str(version) + ': added rule ' + newRuleSet['name'] + ' ' + comment
+                    finalComment = completePropertyJson['comments'] = 'Created from v' + str(version) + ': added rule ' + newRuleSet['name'] + ' ' + comment
                 else:
-                    completePropertyJson['comments'] = 'Created from v' + str(version) + ': added rule ' + newRuleSet['name'] + ' '+ comment + ' ' + args.ruleName + ' rule'
+                    finalComment = completePropertyJson['comments'] = 'Created from v' + str(version) + ': added rule ' + newRuleSet['name'] + ' '+ comment + ' ' + args.ruleName + ' rule'
 
                 #Let us now create a version
                 rootLogger.info('Trying to create a new version of this property based on version ' + str(version))
@@ -277,7 +278,7 @@ if args.addRule or args.replaceRule:
                     uploadRulesResponse = papiObject.uploadRules(session=session, updatedData=json.loads(json.dumps(completePropertyJson)),\
                      property_name=args.property, version=newVersion, propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
                     if uploadRulesResponse.status_code == 200:
-                        rootLogger.info('Success!')
+                        rootLogger.info('\nSuccess!' + finalComment + '\n')
                     else:
                         rootLogger.info('Unable to update rules in property. Reason is: \n\n' + json.dumps(uploadRulesResponse.json(), indent=4))
                         exit()
@@ -399,6 +400,7 @@ if args.listRules:
     if args.version.upper() == 'latest'.upper():
         versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn=args.version.upper(), propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
         version = versionResponse.json()['versions']['items'][0]['propertyVersion']
+        rootLogger.info('Latest version is: v' + str(version) + '\n')
     else:
         version = args.version
         #Validate the version number entered using -version
