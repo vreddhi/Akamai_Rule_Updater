@@ -411,7 +411,7 @@ if args.listRules:
             rootLogger.info('Found version...\n')
 
     rootLogger.info('Fetching property rules...\n')
-    propertyContent = papiObject.getPropertyRulesfromPropertyId(session, propertyDetails['propertyId'], args.version, propertyDetails['contractId'], propertyDetails['groupId'])
+    propertyContent = papiObject.getPropertyRulesfromPropertyId(session, propertyDetails['propertyId'], version, propertyDetails['contractId'], propertyDetails['groupId'])
     if propertyContent.status_code == 200:
         rules = helper.getAllRules([propertyContent.json()['rules']], allruleNames=[])
         rootLogger.info('Rules are:')
