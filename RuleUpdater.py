@@ -282,14 +282,14 @@ if args.addRule or args.replaceRule:
                     rootLogger.info('Unable to create a new version.')
                     exit()
             else:
-                rootLogger.info('\nFound ' + str(updatedCompleteRuleSet['occurances']) + ' occurences of the rule: "' + args.ruleName + '"' + '.Exiting.')
+                rootLogger.info('\nFound ' + str(updatedCompleteRuleSet['occurances']) + ' occurrences of the rule: "' + args.ruleName + '"' + '. Exiting...')
         else:
             rootLogger.info('\nUnable to find rule: "' + args.ruleName + '" in this property.')
             rootLogger.info('Check the -rulename value or run -getDetail to list existing rules for this property.')
             rootLogger.info('Exiting...')
             exit()
     else:
-        rootLogger.info('Unable to fecth property rules.')
+        rootLogger.info('Unable to fetch property rules.')
         exit()
 
 
