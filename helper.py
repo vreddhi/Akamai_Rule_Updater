@@ -129,17 +129,13 @@ def getRule(parentRule,ruleName,ruleContent={}):
     """
     #Initialize ruleContent only if its empty
     global ruleCount
-    if not bool(ruleContent):
-        ruleContent = {}
     for eachRule in parentRule:
         if eachRule['name'].upper() == ruleName.upper():
             ruleCount += 1
             ruleContent = eachRule
-        else:
-            #Check whether we have child rules, where in again behavior might be found
-            if len(eachRule['children']) != 0:
-                ruleContent = getRule(eachRule['children'],ruleName, ruleContent)
-
+        #Check whether we have child rules, where in again behavior might be found
+        if len(eachRule['children']) != 0:
+            ruleContent = getRule(eachRule['children'],ruleName, ruleContent)['ruleContent']
     #Default return of empty dict
     return { 'ruleContent': ruleContent, 'ruleCount': ruleCount }
 
