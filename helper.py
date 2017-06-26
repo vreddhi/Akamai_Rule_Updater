@@ -132,10 +132,9 @@ def getRule(parentRule,ruleName,ruleContent={}):
     if not bool(ruleContent):
         ruleContent = {}
     for eachRule in parentRule:
-        if eachRule['name'] == ruleName:
-            print('Found')
+        if eachRule['name'].upper() == ruleName.upper():
             ruleCount += 1
-            return eachRule
+            ruleContent = eachRule
         else:
             #Check whether we have child rules, where in again behavior might be found
             if len(eachRule['children']) != 0:
