@@ -259,11 +259,11 @@ if args.addRule or args.replaceRule:
                 completePropertyJson['rules'] = updatedCompleteRuleSet['completeRuleSet'][0]
                 #Updating the property comments
                 if args.replaceRule:
-                    finalComment = completePropertyJson['comments'] = 'Created from v' + str(version) + ': replaced existing rule "' + args.ruleName + '" with rule from: '+ args.fromFile
+                    finalComment = completePropertyJson['comments'] = 'Created from v' + str(version) + ': Replaced existing rule "' + args.ruleName + '" with rule from: '+ args.fromFile
                 elif comment == 'at the end':
-                    finalComment = completePropertyJson['comments'] = 'Created from v' + str(version) + ': added rule ' + newRuleSet['name'] + ' ' + comment
+                    finalComment = completePropertyJson['comments'] = 'Created from v' + str(version) + ': Added rule ' + newRuleSet['name'] + ' ' + comment
                 else:
-                    finalComment = completePropertyJson['comments'] = 'Created from v' + str(version) + ': added rule ' + newRuleSet['name'] + ' '+ comment + ' ' + args.ruleName + ' rule'
+                    finalComment = completePropertyJson['comments'] = 'Created from v' + str(version) + ': Added rule ' + newRuleSet['name'] + ' '+ comment + ' ' + args.ruleName + ' rule'
 
                 #Let us now create a version
                 rootLogger.info('Trying to create a new version of this property based on version ' + str(version))
@@ -278,7 +278,7 @@ if args.addRule or args.replaceRule:
                     uploadRulesResponse = papiObject.uploadRules(session=session, updatedData=json.loads(json.dumps(completePropertyJson)),\
                      property_name=args.property, version=newVersion, propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
                     if uploadRulesResponse.status_code == 200:
-                        rootLogger.info('\nSuccess!' + finalComment + '\n')
+                        rootLogger.info('\nSuccess! Comments: "' + finalComment + '"\n')
                     else:
                         rootLogger.info('Unable to update rules in property. Reason is: \n\n' + json.dumps(uploadRulesResponse.json(), indent=4))
                         exit()
