@@ -189,7 +189,7 @@ if args.addRule or args.replaceRule:
 
         if args.insertAfter or args.insertBefore:
             if not args.ruleName:
-                rootLogger.info('Please enter the ruleName using -ruleName.')
+                rootLogger.info('\nPlease enter the ruleName using -ruleName.\n')
                 exit()
             if args.insertAfter:
                 whereTo = 'insertAfter'
@@ -205,6 +205,9 @@ if args.addRule or args.replaceRule:
 
     if args.replaceRule:
         whereTo = 'replace'
+        if not args.ruleName:
+            rootLogger.info('\nPlease enter the rule name to be replaced using –ruleName.\n')
+            exit()
 
     version = args.fromVersion
     #Find the property details (IDs)
