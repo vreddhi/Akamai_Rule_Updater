@@ -336,7 +336,7 @@ if args.getDetail:
                 productionVersion = everyVersionDetail['propertyVersion']
                 if 'note' in everyVersionDetail:
                     productionNote = everyVersionDetail['note']
-        rootLogger.info('Latest version: v' + str(latestVersion))
+        rootLogger.info('Version ' + str(latestVersion) + ' is latest')
         if stagingVersion != 0:
             rootLogger.info('Version ' + str(stagingVersion) + ' is live in staging')
         if stagingVersion == 0:
@@ -353,17 +353,17 @@ if args.getDetail:
 
         if args.fromVersion:
             for everyVersionDetail in versionsResponse.json()['versions']['items']:
-                if int(everyVersionDetail['propertyVersion']) > int(args.fromVersion):
+                if int(everyVersionDetail['propertyVersion']) >= int(args.fromVersion):
                     if 'note' in everyVersionDetail:
-                        rootLogger.info(str(everyVersionDetail['propertyVersion']) + ' ' + everyVersionDetail['note'])
+                        rootLogger.info('v' + str(everyVersionDetail['propertyVersion']) + ' : ' + everyVersionDetail['note'])
                     else:
-                        rootLogger.info(str(everyVersionDetail['propertyVersion']))
+                        rootLogger.info('v' + str(everyVersionDetail['propertyVersion']) + ' : ')
         else:
             for everyVersionDetail in versionsResponse.json()['versions']['items'][:10]:
                 if 'note' in everyVersionDetail:
-                    rootLogger.info(str(everyVersionDetail['propertyVersion']) + ' ' + everyVersionDetail['note'])
+                    rootLogger.info('v' + str(everyVersionDetail['propertyVersion']) + ' : ' + everyVersionDetail['note'])
                 else:
-                    rootLogger.info(str(everyVersionDetail['propertyVersion']))
+                    rootLogger.info('v' + str(everyVersionDetail['propertyVersion']) + ' : ')
     else:
         rootLogger.info('Unable to fetch versions of the property')
         rootLogger.info(json.dumps(versionsResponse.json(), indent=4))
