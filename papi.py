@@ -48,9 +48,9 @@ try:
     access_hostname = config['papi']['hostname']
     session = requests.Session()
     session.auth = EdgeGridAuth(
-    			client_token = client_token,
-    			client_secret = client_secret,
-    			access_token = access_token
+                client_token = client_token,
+                client_secret = client_secret,
+                access_token = access_token
                 )
 except (NameError, AttributeError, KeyError):
     rootLogger.info('\nLooks like ' + os.path.join(os.path.expanduser("~"),'.edgerc') + ' is missing or has invalid entries\n')
@@ -135,7 +135,7 @@ if args.setup:
                 pass
 
             #Create master edgehostname.json file under each contract folder
-            with open(os.path.join('setup','contracts',contractId,'groups','groups.json'),'w') as GroupsFileHandler:
+            with open(os.path.join('setup','contracts',contractId,'groups.json'),'w') as GroupsFileHandler:
                 #Do Nothing
                 pass
     else:
@@ -158,7 +158,7 @@ if args.setup:
                     contractId = everyContract
                     try:
                         #Update the master groups file
-                        with open(os.path.join('setup','contracts',contractId,'groups','groups.json'),'a') as GroupsFileHandler:
+                        with open(os.path.join('setup','contracts',contractId,'groups.json'),'a') as GroupsFileHandler:
                             GroupsFileHandler.write(json.dumps(everyGroup, indent = 4))
                         #Create individual groups file
                         groupFile = groupName + '.json'
@@ -198,27 +198,32 @@ if args.setup:
 
                     #Let us now focus on edgehostnames
                     edgehostnamesFolder = os.path.join('setup','contracts',contractId,'edgehostnames')
-                    if not os.path.exists(edgehostnamesFolder):
-                        os.makedirs(edgehostnamesFolder)
-                    rootLogger.info('Fetching EdgeHostname details under group: ' + groupName)
-                    edgehostnameObject = papiObject.listEdgeHostnames(session, contractId=contractId, groupId=groupId)
-                    if edgehostnameObject.status_code == 200:
-                        for everyEdgeHostNameDetail in edgehostnameObject.json()['edgeHostnames']['items']:
-                            edgeHostnameDomain = everyEdgeHostNameDetail['edgeHostnameDomain']
-                            edgehostnameFile = everyEdgeHostNameDetail['edgeHostnameDomain'] + '.json'
-                            try:
-                                edgehostnamesFile = groupName + '.json'
-                                with open(os.path.join(edgehostnamesFolder,edgehostnameFile), 'w') as edgehostnameFileHandler:
-                                    edgehostnameFileHandler.write(json.dumps(everyEdgeHostNameDetail, indent = 4))
-                            except FileNotFoundError:
-                                rootLogger.info('Unable to write file ' + edgeHostnameDomain + '.json')
-                            #Update the master edgehostname.json file under each contract
-                            with open(os.path.join('setup','contracts',contractId,'edgehostnames.json'),'a') as edgehostnamesFileHandler:
-                                edgehostnamesFileHandler.write(',')
-                                edgehostnamesFileHandler.write(json.dumps(everyEdgeHostNameDetail, indent = 4))
-                                edgehostnamesFileHandler.write(',')
+                    #PAPI edgehostname calls to parent groupIDs also give child groupID edgehostnames. To avoid duplication we are using groupID which has no parents   
+                    if 'parentGroupId' not in everyGroup:
+                        print ("Master groupID is ",groupId)
+                        if not os.path.exists(edgehostnamesFolder):
+                            os.makedirs(edgehostnamesFolder)
+                        rootLogger.info('Fetching EdgeHostname details under group: ' + groupName)
+                        edgehostnameObject = papiObject.listEdgeHostnames(session, contractId=contractId, groupId=groupId)
+                        if edgehostnameObject.status_code == 200:
+                            for everyEdgeHostNameDetail in edgehostnameObject.json()['edgeHostnames']['items']:
+                                edgeHostnameDomain = everyEdgeHostNameDetail['edgeHostnameDomain']
+                                edgehostnameFile = everyEdgeHostNameDetail['edgeHostnameDomain'] + '.json'
+                                try:
+                                    edgehostnamesFile = groupName + '.json'
+                                    with open(os.path.join(edgehostnamesFolder,edgehostnameFile), 'w') as edgehostnameFileHandler:
+                                        edgehostnameFileHandler.write(json.dumps(everyEdgeHostNameDetail, indent = 4))
+                                except FileNotFoundError:
+                                    rootLogger.info('Unable to write file ' + edgeHostnameDomain + '.json')
+                                #Update the master edgehostname.json file under each contract
+                                with open(os.path.join('setup','contracts',contractId,'edgehostnames.json'),'a') as edgehostnamesFileHandler:
+                                    edgehostnamesFileHandler.write(',')
+                                    edgehostnamesFileHandler.write(json.dumps(everyEdgeHostNameDetail, indent = 4))
+                                    edgehostnamesFileHandler.write(',')
+                        else:
+                            rootLogger.info('Unable to retrieve edgehostname details under group: ' + groupName + ' contract: ' + contractId)
                     else:
-                        rootLogger.info('Unable to retrieve edgehostname details under group: ' + groupName + ' contract: ' + contractId)
+                        rootLogger.info('Couldnt find master group ID')        
                 rootLogger.info('-------------- *************** --------------\n\n')
             else:
                 rootLogger.info('Ignoring  Group: ' + groupName + ' as it is not associated to any Contract' )
