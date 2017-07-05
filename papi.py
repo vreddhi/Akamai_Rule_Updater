@@ -162,7 +162,7 @@ if args.setup:
                             GroupsFileHandler.write(json.dumps(everyGroup, indent = 4))
                         #Create individual groups file
                         groupFile = groupName + '.json'
-                        with open(os.path.join(groupsFolder,groupFile), 'w') as groupFileHandler:
+                        with open(os.path.join('setup','contracts',contractId,'groups',groupFile), 'w') as groupFileHandler:
                             groupFileHandler.write(json.dumps(everyGroup, indent = 4))
                     except FileNotFoundError:
                         rootLogger.info('Unable to write file ' + groupName + '.json')
