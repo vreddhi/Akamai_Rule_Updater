@@ -45,7 +45,7 @@ try:
     client_token = config['papi']['client_token']
     client_secret = config['papi']['client_secret']
     access_token = config['papi']['access_token']
-    access_hostname = config['papi']['hostname']
+    access_hostname = config['papi']['host']
     session = requests.Session()
     session.auth = EdgeGridAuth(
                 client_token = client_token,
