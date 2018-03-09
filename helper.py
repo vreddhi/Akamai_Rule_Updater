@@ -39,6 +39,9 @@ def getChildRulesandUpdate(parentRule,behavior):
                     else:
                         #The options value was not found, so move on
                         pass
+                #Update the behavior
+                for option in behavior['options']:
+                    eachbehavior['options'][option] = behavior['options'][option]
             else:
                 #The behavior is not being updated, so move on
                 pass
@@ -272,7 +275,8 @@ def behaviorsToJson(config, ruleName):
                 behaviorDetails['options'][eachOptionOfBehavior.split('.')[2]] = config[ruleName][eachOptionOfBehavior]
             rulebehaviorList.append(behaviorDetails)
 
-def ConfigToJsonConverter(inputFilename,outputFilename,ruleName,outputRules):
+outputRule = {}
+def ConfigToJsonConverter(inputFilename,outputFilename,ruleName):
     """
     Function to convert configfile to json content
 
@@ -285,6 +289,7 @@ def ConfigToJsonConverter(inputFilename,outputFilename,ruleName,outputRules):
     rule : Json representation of a rule
     """
 
+    global outputRule
     config = configparser.ConfigParser()
     #Make the parser case-sensitive
     config.optionxform = str
@@ -296,21 +301,38 @@ def ConfigToJsonConverter(inputFilename,outputFilename,ruleName,outputRules):
     singleRule = {}
     singleRule['children'] = []
     singleRule['behaviors'] = []
-
+    ruleName = 'Rule-' + ruleName
     if config.has_section(ruleName):
         singleRule['name'] = ruleName
+        outputRule['name'] = ruleName
+        isParent = {}
+        isParent[ruleName] = {}
+        isParent[ruleName]['children'] = []
+        if 'children' not in singleRule:
+            singleRule['children'] = []
+        if 'childRules' in config.options(ruleName):
+            isParent['name'] = ruleName
+            children = config[ruleName]['childRules'].replace('[','').replace(']','').replace("'",'').split(',')
+            if len(children) > 0:
+                for eachChildRuleName in children:
+                    childRuleName = eachChildRuleName.strip()
+                    print(childRuleName)
+                    ruleData = singleRule['children'].append(ConfigToJsonConverter(inputFilename, outputFilename, childRuleName))
+                    print(json.dumps(singleRule, indent=4))
         if 'behaviors' in config.options(ruleName):
             behaviors = config[ruleName]['behaviors'].replace('[','').replace(']','').replace("'",'').split(',')
             #print(behaviors)
             rulebehaviorList = []
             behaviorOptionNames = list(filter(lambda x: behaviorPattern.match(x), config.options(ruleName)))
-            print(behaviorOptionNames)
+            #print(behaviorOptionNames)
             for eachBehavior in behaviors:
                 behaviorDetails = {}
                 behaviorDetails['options'] = {}
                 behaviorDetails['name'] = eachBehavior
-                behaviorOptions = list(filter(lambda x: eachBehavior.lower() in x.lower() , behaviorOptionNames))
-                print(eachBehavior +  ' : ' + str(behaviorOptions) + '\n\n')
+                behaviorOptions = list(filter(lambda x: eachBehavior.strip().lower() in x.strip().lower() , behaviorOptionNames))
+                #print(str(eachBehavior) + ' : '+ str(behaviorOptionNames) + '\n')
+                #print(str(behaviorOptions) + '\n\n')
+                #print(eachBehavior +  ' : ' + str(behaviorOptions) + '\n\n')
                 for eachOptionOfBehavior in behaviorOptions:
                     optionValue = config[ruleName][eachOptionOfBehavior]
                     if optionValue.isdigit():
@@ -324,16 +346,7 @@ def ConfigToJsonConverter(inputFilename,outputFilename,ruleName,outputRules):
             singleRule['behaviors'] = rulebehaviorList
         #print(json.dumps(singleRule, indent=4))
 
-
-        if 'childRules' in config.options(ruleName):
-            children = config[ruleName]['childRules'].replace('[','').replace(']','').replace("'",'').split(',')
-            if len(children) > 0:
-                for eachChildRuleName in children:
-                    ruleData = {}
-                    childRuleName = 'Rule-' + eachChildRuleName.strip()
-                    ConfigToJsonConverter(inputFilename, outputFilename, childRuleName, outputRules)
-
-        return singleRule
+        return outputRule
 
     else:
         print( ruleName + ' is not found. cant proceed to convert')
