@@ -74,6 +74,7 @@ parser.add_argument("-insertBefore",help="This inserts rule before the rulename 
 parser.add_argument("-insertLast",help="This inserts rule at the end of configuration",action="store_true")
 parser.add_argument("-ruleName",help="Rule Name to find")
 parser.add_argument("-updateBehavior",help="Update Behavior",action="store_true")
+parser.add_argument("-deleteBehavior",help="Delete Behavior",action="store_true")
 
 parser.add_argument("-debug",help="DEBUG mode to generate additional logs for troubleshooting",action="store_true")
 
@@ -445,6 +446,15 @@ if args.updateBehavior:
         rootLogger.info('Property details were not found. Try running setup again, or double check property name\n')
         exit()
 
+    filename = 'activate.txt'
+    #Make a call to update the rules
+    versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn='LATEST', propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
+    #print(json.dumps(versionResponse.json(), indent=4))
+    latestversion = versionResponse.json()['versions']['items'][0]['propertyVersion']
+    with open(filename,'a') as fileHandler:
+        fileHandler.write('akamai property activate ' + args.property + ' --version ' + str(latestversion) + ' --network BOTH --email vbhat@akamai.com\n')
+
+
     #Fetch the latest version if need be
     rootLogger.info('Fetching version ' + args.version + ' ...')
     if args.version.upper() == 'latest'.upper():
@@ -471,6 +481,9 @@ if args.updateBehavior:
     behavior['options']['trueClientIpClientSetting'] = False
     behavior['options']['trueClientIpHeader'] = 'True-Client-IP'
     behavior['options']['enableTrueClientIp'] = True
+    behavior['options']['verificationMode'] = 'CUSTOM'
+    behavior['options']['originCertsToHonor'] = 'STANDARD_CERTIFICATE_AUTHORITIES'
+    behavior['options']['cacheKeyHostname'] = 'REQUEST_HOST_HEADER'
 
     filename = 'activate.txt'
     if propertyContent.status_code == 200:
@@ -491,7 +504,90 @@ if args.updateBehavior:
             rootLogger.info('\nNow trying to upload the new ruleset...')
             ruleData = {}
             ruleData['rules'] = rules[0]
-            ruleData['comments'] = 'Created from v' + str(version) + '. Enabled TrueClientIP'
+            ruleData['comments'] = 'Created from v' + str(version) + '. Update CacheKey'
+            uploadRulesResponse = papiObject.uploadRules(session=session, updatedData=json.loads(json.dumps(ruleData)),\
+             property_name=args.property, version=newVersion, propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
+            if uploadRulesResponse.status_code == 200:
+                rootLogger.info('\nSuccess!n')
+            else:
+                rootLogger.info('Unable to update rules in property. Reason is: \n\n' + json.dumps(uploadRulesResponse.json(), indent=4))
+                exit()
+
+if args.deleteBehavior:
+    papiObject = PapiWrapper(access_hostname)
+    if not args.property:
+        rootLogger.info('\nPlease enter property name using -property.')
+        exit()
+    if not args.version:
+        rootLogger.info('\nPlease enter the version using -version.')
+        exit()
+
+    #Find the property details (IDs)
+    propertyDetails = helper.getPropertyDetailsFromLocalStore(args.property)
+    #Check if it not an empty response
+    if propertyDetails:
+        rootLogger.info('Found Property Details: ')
+        rootLogger.info('contractId: ' + propertyDetails['contractId'])
+        rootLogger.info('groupId: ' + propertyDetails['groupId'] )
+        rootLogger.info('propertyId: ' + propertyDetails['propertyId']+ '\n')
+        pass
+    else:
+        rootLogger.info('Property details were not found. Try running setup again, or double check property name\n')
+        exit()
+
+    filename = 'activate.txt'
+    #Make a call to update the rules
+    versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn='LATEST', propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
+    #print(json.dumps(versionResponse.json(), indent=4))
+    latestversion = versionResponse.json()['versions']['items'][0]['propertyVersion']
+    with open(filename,'a') as fileHandler:
+        fileHandler.write('akamai property activate ' + args.property + ' --version ' + str(latestversion) + ' --network BOTH --email vbhat@akamai.com\n')
+
+
+    #Fetch the latest version if need be
+    rootLogger.info('Fetching version ' + args.version + ' ...')
+    if args.version.upper() == 'latest'.upper():
+        versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn=args.version.upper(), propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
+        version = versionResponse.json()['versions']['items'][0]['propertyVersion']
+        rootLogger.info('Latest version is: v' + str(version) + '\n')
+    else:
+        version = args.version
+        #Validate the version number entered using -version
+        versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn='LATEST', propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
+        latestversion = versionResponse.json()['versions']['items'][0]['propertyVersion']
+        if int(args.version) > int(latestversion):
+            rootLogger.info('Please check the version number. The highest/latest version is: ' + str(latestversion) + '\n')
+            exit()
+        else:
+            rootLogger.info('Found version...\n')
+
+    rootLogger.info('Fetching property rules...\n')
+    propertyContent = papiObject.getPropertyRulesfromPropertyId(session, propertyDetails['propertyId'], version, propertyDetails['contractId'], propertyDetails['groupId'])
+    #print(json.dumps(propertyContent.json(), indent=4))
+    behavior = {}
+    behavior['name'] = 'origin'
+
+
+    filename = 'activate.txt'
+    if propertyContent.status_code == 200:
+        rules = helper.deleteBehavior([propertyContent.json()['rules']], behavior)
+        #print(json.dumps(rules[0], indent=4))
+
+        #Let us now create a version
+        rootLogger.info('Trying to create a new version of this property based on version ' + str(version))
+        versionResponse = papiObject.createVersion(session, baseVersion=version, property_name=args.property)
+        if versionResponse.status_code == 201:
+            #Extract the version number
+            matchPattern = re.compile('/papi/v0/properties/prp_.*/versions/(.*)(\?.*)')
+            newVersion = matchPattern.match(versionResponse.json()['versionLink']).group(1)
+            rootLogger.info('Successfully created new property version: v' + str(newVersion))
+            with open(filename,'a') as fileHandler:
+                fileHandler.write('akamai property activate ' + args.property + ' --version ' + str(newVersion) + ' --network BOTH --email vbhat@akamai.com\n')
+            #Make a call to update the rules
+            rootLogger.info('\nNow trying to upload the new ruleset...')
+            ruleData = {}
+            ruleData['rules'] = rules[0]
+            ruleData['comments'] = 'Created from v' + str(version) + '. Update CacheKey'
             uploadRulesResponse = papiObject.uploadRules(session=session, updatedData=json.loads(json.dumps(ruleData)),\
              property_name=args.property, version=newVersion, propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
             if uploadRulesResponse.status_code == 200:
