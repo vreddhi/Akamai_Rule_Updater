@@ -36,12 +36,45 @@ def getChildRulesandUpdate(parentRule,behavior):
                 for option in eachbehavior['options']:
                     if option in behavior['options']:
                         eachbehavior['options'][option] = behavior['options'][option]
+                    if 'customCertificates' in behavior['options']:
+                        del behavior['options']['customCertificates']
                     else:
                         #The options value was not found, so move on
                         pass
                 #Update the behavior
                 for option in behavior['options']:
                     eachbehavior['options'][option] = behavior['options'][option]
+            else:
+                #The behavior is not being updated, so move on
+                pass
+        #Check whether we have child rules, where in again behavior might be found
+        if len(eachRule['children']) != 0:
+            getChildRulesandUpdate(eachRule['children'],behavior)
+
+    #Awesome, we are done updating behaviors, lets go back
+    return parentRule
+
+def deleteBehavior(parentRule,behavior):
+    """
+    Function to fetch all childrules of given parentRule
+
+    Parameters
+    ----------
+    parentRule : <List>
+        Default parent rule represented as a list
+
+    behavior: <Dictionary>
+        Details of behavior to be updated
+
+    Returns
+    -------
+    parentRule : Updated Rule tree
+    """
+    for eachRule in parentRule:
+        for eachbehavior in eachRule['behaviors']:
+            if eachbehavior['name'] == behavior['name']:
+                #Delete the behavior
+                del eachbehavior
             else:
                 #The behavior is not being updated, so move on
                 pass
