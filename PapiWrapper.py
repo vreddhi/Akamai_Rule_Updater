@@ -328,7 +328,7 @@ class PapiWrapper(object):
             self.groupId = groupId
             self.contractId = contractId
 
-        VersionUrl = 'https://' + self.access_hostname + '/papi/v1/properties/' + self.propertyId + '/versions/?contractId=' + self.contractId +'&groupId=' + self.groupId 
+        VersionUrl = 'https://' + self.access_hostname + '/papi/v1/properties/' + self.propertyId + '/versions/?contractId=' + self.contractId +'&groupId=' + self.groupId
         VersionResponse = session.get(VersionUrl)
         return VersionResponse
 
@@ -368,7 +368,7 @@ class PapiWrapper(object):
             self.final_response == "SUCCESS"
         return updateResponse
 
-    def activateConfiguration(self,session,property_name,version,network,emailList,notes,propertyId='optional',contractId='optional',groupId='optional'):
+    def activateConfiguration(self,session,property_name,version,network,emailList,notes,propertyId='optional',contractId='optional',groupId='optional',ignoreWarnings='optional'):
         """
         Function to activate a configuration or property
 
@@ -408,7 +408,10 @@ class PapiWrapper(object):
                 "notifyEmails": %s
             } """ % (version,network.upper(),notes,emails)
 
-        actUrl  = 'https://' + self.access_hostname + '/papi/v0/properties/'+ self.propertyId + '/activations/?contractId=' + self.contractId +'&groupId=' + self.groupId
+        if ignoreWarnings == 'optional':
+            actUrl  = 'https://' + self.access_hostname + '/papi/v0/properties/'+ self.propertyId + '/activations/?contractId=' + self.contractId +'&groupId=' + self.groupId
+        else:
+            actUrl  = 'https://' + self.access_hostname + '/papi/v0/properties/'+ self.propertyId + '/activations/?contractId=' + self.contractId +'&groupId=' + self.groupId + '&acknowledgeAllWarnings=true'
         activationResponse = session.post(actUrl, data=activationDetails, headers=self.headers)
         try:
             if activationResponse.status_code == 400 and activationResponse.json()['detail'].find('following activation warnings must be acknowledged'):
@@ -754,3 +757,52 @@ class PapiWrapper(object):
             edgehostnameUrl = 'https://' + self.access_hostname + '/papi/v0/edgehostnames/?contractId=' + contractId + '&groupId=' + groupId
             edgehostnameResponse = session.get(edgehostnameUrl)
         return edgehostnameResponse
+
+    def listProperties(self,session,contractId='optional',groupId='optional'):
+        """
+        Function to fetch all properties
+
+        Parameters
+        ----------
+        session : <string>
+            An EdgeGrid Auth akamai session object
+        contractId : contractId
+            corresponding contractId
+        groupId : groupId
+            corresponding groupId
+        Returns
+        -------
+        propertiesList : property List object
+        """
+        if contractId == 'optional' and groupId == 'optional':
+            #update code to fetch group and contract info
+            pass
+        else:
+            propertiesListUrl = 'https://' + self.access_hostname + '/papi/v1/properties?contractId=' + contractId + '&groupId=' + groupId
+            propertiesListResponse = session.get(propertiesListUrl)
+        return propertiesListResponse
+
+
+    def listHostnames(self,session,propertyId='optional',version='optional',contractId='optional',groupId='optional'):
+        """
+        Function to fetch all properties
+
+        Parameters
+        ----------
+        session : <string>
+            An EdgeGrid Auth akamai session object
+        contractId : contractId
+            corresponding contractId
+        groupId : groupId
+            corresponding groupId
+        Returns
+        -------
+        hostNameList : hostName List object
+        """
+        if contractId == 'optional' and groupId == 'optional' and propertyId == 'optional'and version == 'optional':
+            #update code to fetch group and contract info
+            pass
+        else:
+            hostnameListUrl = 'https://' + self.access_hostname + '/papi/v1/properties/' + propertyId + '/versions/' + str(version) + '/hostnames'+ '?contractId=' + contractId + '&groupId=' + groupId
+            hostnameListResponse = session.get(hostnameListUrl)
+        return hostnameListResponse
