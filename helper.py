@@ -54,6 +54,32 @@ def getChildRulesandUpdate(parentRule,behavior):
     #Awesome, we are done updating behaviors, lets go back
     return parentRule
 
+def addBehaviorToRule(parentRule,behavior,ruleName):
+    """
+    Function to fetch all childrules of given parentRule
+
+    Parameters
+    ----------
+    parentRule : <List>
+        Default parent rule represented as a list
+
+    behavior: <Dictionary>
+        Details of behavior to be updated
+
+    Returns
+    -------
+    parentRule : Updated Rule tree
+    """
+    for eachRule in parentRule:
+        if eachRule['name'] == ruleName:
+            eachRule['behaviors'].append(behavior)
+        #Check whether we have child rules, where in again behavior might be found
+        if len(eachRule['children']) != 0:
+            getChildRulesandUpdate(eachRule['children'],behavior)
+
+    #Awesome, we are done updating behaviors, lets go back
+    return parentRule
+
 def deleteBehavior(parentRule,behavior):
     """
     Function to fetch all childrules of given parentRule
@@ -103,15 +129,19 @@ def getPropertyDetailsFromLocalStore(PropertyName):
         if os.path.isdir(os.path.join('setup','contracts',eachItem)):
             propertyFile = os.path.join('setup','contracts',eachItem,'properties.json')
             #Empty file results in JSON read error. so check it
-            if os.stat(propertyFile).st_size != 0:
-                with open(propertyFile,'r') as propertiesFileHandler:
-                    propertiesContent = json.loads(propertiesFileHandler.read())
-                    for everyProperty in propertiesContent:
-                        #Some property names have .xml as suffix
-                        if everyProperty['propertyName'].upper() == PropertyName.upper() or everyProperty['propertyName'].upper() == PropertyName + '.xml'.upper():
-                            return everyProperty
-                        else:
-                            pass
+            try:
+                if os.stat(propertyFile).st_size != 0:
+                    with open(propertyFile,'r') as propertiesFileHandler:
+                        propertiesContent = json.loads(propertiesFileHandler.read())
+                        for everyProperty in propertiesContent:
+                            #Some property names have .xml as suffix
+                            if everyProperty['propertyName'].upper() == PropertyName.upper() or everyProperty['propertyName'].upper() == PropertyName + '.xml'.upper():
+                                return everyProperty
+                            else:
+                                pass
+            except FileNotFoundError:
+                pass                    
+
     #Default return of empty dict
     return {}
 
