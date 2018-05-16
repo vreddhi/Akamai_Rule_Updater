@@ -75,7 +75,7 @@ def addBehaviorToRule(parentRule,behavior,ruleName):
             eachRule['behaviors'].append(behavior)
         #Check whether we have child rules, where in again behavior might be found
         if len(eachRule['children']) != 0:
-            getChildRulesandUpdate(eachRule['children'],behavior)
+            addBehaviorToRule(eachRule['children'],behavior,ruleName)
 
     #Awesome, we are done updating behaviors, lets go back
     return parentRule
@@ -140,7 +140,7 @@ def getPropertyDetailsFromLocalStore(PropertyName):
                             else:
                                 pass
             except FileNotFoundError:
-                pass                    
+                pass
 
     #Default return of empty dict
     return {}
