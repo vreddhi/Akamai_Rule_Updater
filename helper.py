@@ -14,46 +14,6 @@ import re
 #-----Below section contains custom parsing functions-------#
 #-----------------------------------------------------------#
 
-def getChildRulesandUpdate(parentRule,behavior):
-    """
-    Function to fetch all childrules of given parentRule
-
-    Parameters
-    ----------
-    parentRule : <List>
-        Default parent rule represented as a list
-
-    behavior: <Dictionary>
-        Details of behavior to be updated
-
-    Returns
-    -------
-    parentRule : Updated Rule tree
-    """
-    for eachRule in parentRule:
-        for eachbehavior in eachRule['behaviors']:
-            if eachbehavior['name'] == behavior['name']:
-                for option in eachbehavior['options']:
-                    if option in behavior['options']:
-                        eachbehavior['options'][option] = behavior['options'][option]
-                    if 'customCertificates' in behavior['options']:
-                        del behavior['options']['customCertificates']
-                    else:
-                        #The options value was not found, so move on
-                        pass
-                #Update the behavior
-                for option in behavior['options']:
-                    eachbehavior['options'][option] = behavior['options'][option]
-            else:
-                #The behavior is not being updated, so move on
-                pass
-        #Check whether we have child rules, where in again behavior might be found
-        if len(eachRule['children']) != 0:
-            getChildRulesandUpdate(eachRule['children'],behavior)
-
-    #Awesome, we are done updating behaviors, lets go back
-    return parentRule
-
 def addBehaviorToRule(parentRule,behavior,ruleName):
     """
     Function to fetch all childrules of given parentRule
@@ -76,9 +36,11 @@ def addBehaviorToRule(parentRule,behavior,ruleName):
         #Check whether we have child rules, where in again behavior might be found
         if len(eachRule['children']) != 0:
             addBehaviorToRule(eachRule['children'],behavior,ruleName)
+        else:
+            return parentRule    
 
     #Awesome, we are done updating behaviors, lets go back
-    return parentRule
+    #return parentRule
 
 def deleteBehavior(parentRule,behavior):
     """
@@ -106,44 +68,35 @@ def deleteBehavior(parentRule,behavior):
                 pass
         #Check whether we have child rules, where in again behavior might be found
         if len(eachRule['children']) != 0:
-            getChildRulesandUpdate(eachRule['children'],behavior)
+            deleteBehavior(eachRule['children'],behavior)
 
     #Awesome, we are done updating behaviors, lets go back
     return parentRule
 
-def getPropertyDetailsFromLocalStore(PropertyName):
+def deleteRules(parentRule,ruleName):
     """
-    Function to fetch property details from local store
+    Function to fetch all delete rules matching a ruleName
 
     Parameters
     ----------
-    PropertyName : <String>
-        propertyname to find details of
+    ruleName : <List>
+        Default parent rule represented as a list
 
     Returns
     -------
-    property: <dict>
-        Dictionary of property details or an empty dict if not found
+    parentRule : Updated Rule tree
     """
-    for eachItem in os.listdir(os.path.join('setup','contracts')):
-        if os.path.isdir(os.path.join('setup','contracts',eachItem)):
-            propertyFile = os.path.join('setup','contracts',eachItem,'properties.json')
-            #Empty file results in JSON read error. so check it
-            try:
-                if os.stat(propertyFile).st_size != 0:
-                    with open(propertyFile,'r') as propertiesFileHandler:
-                        propertiesContent = json.loads(propertiesFileHandler.read())
-                        for everyProperty in propertiesContent:
-                            #Some property names have .xml as suffix
-                            if everyProperty['propertyName'].upper() == PropertyName.upper() or everyProperty['propertyName'].upper() == PropertyName + '.xml'.upper():
-                                return everyProperty
-                            else:
-                                pass
-            except FileNotFoundError:
-                pass
+    if parentRule[0]['name'] == ruleName:
+        del parentRule[0]      
 
-    #Default return of empty dict
-    return {}
+    for eachRule in parentRule:
+        #Check whether we have child rules, where in again behavior might be found            
+        if 'eachRule' in locals() and len(eachRule['children']) != 0:
+            deleteRules(eachRule['children'],ruleName)               
+
+    #Awesome, we are done updating rules, lets go back
+    return parentRule
+
 
 def getAllRules(parentRule,allruleNames=[],isChild='optional',parentRuleName='optional'):
     """
@@ -414,3 +367,13 @@ def ConfigToJsonConverter(inputFilename,outputFilename,ruleName):
     else:
         print( ruleName + ' is not found. cant proceed to convert')
         exit()
+
+def addVariables(existingVariables, newVariables):
+    """
+    Function to add new variables
+    """
+
+    for everyVariable in newVariables:
+        existingVariables.append(everyVariable)
+
+    return existingVariables

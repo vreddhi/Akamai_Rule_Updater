@@ -27,7 +27,7 @@ class PapiWrapper(object):
     contractId = "optional"
     propertyId = "optional"
 
-    def __init__(self, access_hostname, property_name = "optional", \
+    def __init__(self, access_hostname, account_switch_key, property_name = "optional", \
                 version = "optional",notes = "optional", emails = "optional", \
                 groupId = "optional", contractId = "optional", propertyId = "optional"):
         self.access_hostname = access_hostname
@@ -38,6 +38,10 @@ class PapiWrapper(object):
         self.groupId = groupId
         self.contractId = contractId
         self.propertyId = propertyId
+        if account_switch_key != '':
+            self.account_switch_key = '&accountSwitchKey=' + account_switch_key
+        else:
+            self.account_switch_key = ''        
 
     def getContracts(self,session):
         """
@@ -54,6 +58,8 @@ class PapiWrapper(object):
             (contractsResponse) Object with all details
         """
         contractsUrl = 'https://' + self.access_hostname + '/papi/v0/contracts/'
+        contractsUrl = self.formUrl(contractsUrl)
+
         contractsResponse = session.get(contractsUrl)
         return contractsResponse
 
@@ -119,6 +125,8 @@ class PapiWrapper(object):
         """
 
         groupUrl = 'https://' + self.access_hostname + '/papi/v0/groups/'
+        groupUrl = self.formUrl(groupUrl)
+
         groupResponse = session.get(groupUrl)
         if groupResponse.status_code == 200:
             self.final_response = "SUCCESS"
@@ -142,6 +150,8 @@ class PapiWrapper(object):
         """
 
         searchUrl = 'https://' + self.access_hostname + '/papi/v0/search/find-by-value'
+        searchUrl = self.formUrl(searchUrl)
+
         if propertyName != 'optional':
             seachTag = 'propertyName'
             searchValue = propertyName
@@ -180,6 +190,8 @@ class PapiWrapper(object):
             A dictionarty containing name, propertyId, contractId and groupId of all properties under the customer account
         """
         url = 'https://' + self.access_hostname + '/papi/v0/properties/?contractId=' + contractId +'&groupId=' + groupId
+        url = self.formUrl(url)
+
         propertiesResponse = session.get(url)
         return propertiesResponse
 
@@ -204,6 +216,8 @@ class PapiWrapper(object):
 
         self.getPropertyInfo(session, property_name)
         rulesUrl = 'https://' + self.access_hostname  + '/papi/v0/properties/' + self.propertyId +'/versions/'+str(version)+'/rules/?contractId='+ self.contractId +'&groupId='+ self.groupId
+        rulesUrl = self.formUrl(rulesUrl)
+
         rulesResponse = session.get(rulesUrl)
         if rulesResponse.status_code == 200:
             self.final_response = "SUCCESS"
@@ -231,6 +245,8 @@ class PapiWrapper(object):
         """
 
         rulesUrl = 'https://' + self.access_hostname  + '/papi/v0/properties/' + propertyId +'/versions/'+str(version)+'/rules/?contractId='+ contractId +'&groupId='+ groupId
+        rulesUrl = self.formUrl(rulesUrl)
+
         rulesResponse = session.get(rulesUrl)
         if rulesResponse.status_code == 200:
             self.final_response = "SUCCESS"
@@ -264,6 +280,8 @@ class PapiWrapper(object):
         }
         """ % (baseVersion)
         createVersionUrl = 'https://' + self.access_hostname + '/papi/v0/properties/' + self.propertyId + '/versions/?contractId=' + self.contractId + '&groupId=' + self.groupId
+        createVersionUrl = self.formUrl(createVersionUrl)
+
         createVersionResponse = session.post(createVersionUrl, data=newVersionData,headers=self.headers)
         if createVersionResponse.status_code == 201:
             self.final_response = "SUCCESS"
@@ -301,6 +319,9 @@ class PapiWrapper(object):
             VersionUrl = 'https://' + self.access_hostname + '/papi/v0/properties/' + self.propertyId + '/versions/latest?contractId=' + self.contractId +'&groupId=' + self.groupId + '&activatedOn=STAGING'
         elif activeOn == "PRODUCTION":
             VersionUrl = 'https://' + self.access_hostname + '/papi/v0/properties/' + self.propertyId + '/versions/latest?contractId=' + self.contractId +'&groupId=' + self.groupId + '&activatedOn=PRODUCTION'
+
+        VersionUrl = self.formUrl(VersionUrl)
+
         VersionResponse = session.get(VersionUrl)
         return VersionResponse
 
@@ -329,6 +350,8 @@ class PapiWrapper(object):
             self.contractId = contractId
 
         VersionUrl = 'https://' + self.access_hostname + '/papi/v1/properties/' + self.propertyId + '/versions/?contractId=' + self.contractId +'&groupId=' + self.groupId
+        VersionUrl = self.formUrl(VersionUrl)
+
         VersionResponse = session.get(VersionUrl)
         return VersionResponse
 
@@ -358,6 +381,8 @@ class PapiWrapper(object):
             self.contractId = contractId
 
         updateurl = 'https://' + self.access_hostname  + '/papi/v0/properties/'+ self.propertyId + "/versions/" + str(version) + '/rules/' + '?contractId=' + self.contractId +'&groupId=' + self.groupId
+        updateurl = self.formUrl(updateurl)
+
         updatedData = json.dumps(updatedData)
         updateResponse = session.put(updateurl,data=updatedData,headers=self.headers)
         if updateResponse.status_code == 403:
@@ -412,6 +437,9 @@ class PapiWrapper(object):
             actUrl  = 'https://' + self.access_hostname + '/papi/v0/properties/'+ self.propertyId + '/activations/?contractId=' + self.contractId +'&groupId=' + self.groupId
         else:
             actUrl  = 'https://' + self.access_hostname + '/papi/v0/properties/'+ self.propertyId + '/activations/?contractId=' + self.contractId +'&groupId=' + self.groupId + '&acknowledgeAllWarnings=true'
+
+        actUrl = self.formUrl(actUrl)
+
         activationResponse = session.post(actUrl, data=activationDetails, headers=self.headers)
         try:
             if activationResponse.status_code == 400 and activationResponse.json()['detail'].find('following activation warnings must be acknowledged'):
@@ -475,6 +503,8 @@ class PapiWrapper(object):
 
         self.getPropertyInfo(session, property_name)
         versionUrl = 'https://' + self.access_hostname  + '/papi/v0/properties/'+ self.propertyId + "/versions/" + '?contractId=' + self.contractId +'&groupId=' + self.groupId
+        versionUrl = self.formUrl(versionUrl)
+
         productId = ''
         versionEtag = ''
         versionResponse = session.get(versionUrl)
@@ -498,6 +528,8 @@ class PapiWrapper(object):
         """ % (productId,new_property_name,self.propertyId,version,versionEtag)
 
         cloneUrl = 'https://' + self.access_hostname  + '/papi/v0/properties/?contractId=' + self.contractId +'&groupId=' + self.groupId
+        cloneUrl = self.formUrl(cloneUrl)
+
         cloneResponse = session.post(cloneUrl, data=cloneData, headers=self.headers)
         return cloneResponse
 
@@ -531,6 +563,8 @@ class PapiWrapper(object):
         """ % (productId,new_property_name)
 
         createUrl = 'https://' + self.access_hostname  + '/papi/v0/properties/?contractId=' + self.contractId +'&groupId=' + self.groupId
+        createUrl = self.formUrl(createUrl)
+
         createResponse = session.post(createUrl, data=createData, headers=self.headers)
         return createResponse
 
@@ -553,6 +587,8 @@ class PapiWrapper(object):
 
         self.getPropertyInfo(session, property_name)
         deleteurl = 'https://' + self.access_hostname  + '/papi/v0/properties/'+ self.propertyId + '?contractId=' + self.contractId +'&groupId=' + self.groupId
+        deleteurl = self.formUrl(deleteurl)
+
         deleteResponse = session.delete(deleteurl)
         if deleteResponse.status_code == 403:
             self.final_response == "FAILURE"
@@ -582,9 +618,13 @@ class PapiWrapper(object):
             for everyItem in contractsResponse.json()['contracts']['items']:
                 contractId = everyItem['contractId']
                 productsUrl = 'https://' + self.access_hostname + '/papi/v0/products/?contractId=' + contractId
+                productsUrl = self.formUrl(productsUrl)
+
                 productsResponse = session.get(productsUrl)
         else:
             productsUrl = 'https://' + self.access_hostname + '/papi/v0/products/?contractId=' + contractId
+            productsUrl = self.formUrl(productsUrl)
+
             productsResponse = session.get(productsUrl)
         return productsResponse
 
@@ -604,6 +644,8 @@ class PapiWrapper(object):
             (ruleFomratResponse) Object with all response details.
         """
         ruleFomratUrl = 'https://' + self.access_hostname + '/papi/v0/rule-formats'
+        ruleFomratUrl = self.formUrl(ruleFomratUrl)
+
         ruleFomratResponse = session.get(ruleFomratUrl)
         return ruleFomratResponse
 
@@ -629,6 +671,8 @@ class PapiWrapper(object):
         self.getPropertyInfo(session, property_name)
         '/papi/v0/properties/' + self.propertyId + '/versions/' + version + '/rules/?contractId=' + self.contractId + '&groupId=' + self.groupId
         ruleTreeUrl = 'https://' + self.access_hostname + '/papi/v0/properties/' + self.propertyId + '/versions/' + version + '/rules/?contractId=' + self.contractId + '&groupId=' + self.groupId
+        ruleTreeUrl = self.formUrl(ruleTreeUrl)
+
         ruleTreeResponse = session.get(ruleTreeUrl,headers=mime_header)
         return ruleTreeResponse
 
@@ -652,6 +696,8 @@ class PapiWrapper(object):
         self.getPropertyInfo(session, property_name)
         '/papi/v0/properties/' + self.propertyId + '/versions/' + version + '/rules/?contractId=' + self.contractId + '&groupId=' + self.groupId
         updateruleTreeUrl = 'https://' + self.access_hostname + '/papi/v0/properties/' + self.propertyId + '/versions/' + version + '/rules/?contractId=' + self.contractId + '&groupId=' + self.groupId
+        updateruleTreeUrl = self.formUrl(updateruleTreeUrl)
+
         updateruleTreeResponse = session.put(updateruleTreeUrl,headers=mime_header)
         return updateruleTreeResponse
 
@@ -681,6 +727,8 @@ class PapiWrapper(object):
         }
         """ % (productId,hostname)
         createEdgeHostnameUrl = 'https://' + self.access_hostname + '/papi/v0/edgehostnames/?contractId=' + self.contractId + '&groupId=' + self.groupId
+        createEdgeHostnameUrl = self.formUrl(createEdgeHostnameUrl)
+
         createEdgeHostnameResponse = session.post(createEdgeHostnameUrl,data=hostnameData,headers=self.headers)
         return createEdgeHostnameResponse
 
@@ -713,6 +761,8 @@ class PapiWrapper(object):
         """ % (hostname,edgeHostnameId)
 
         updateHostnameUrl = 'https://' + self.access_hostname + '/papi/v0/properties/' + self.propertyId + '/versions/' + str(version) + '/hostnames/?contractId=' + self.contractId + '&groupId=' + self.groupId + '&validateHostnames=false'
+        updateHostnameUrl = self.formUrl(updateHostnameUrl)
+
         updateHostnameResponse = session.put(updateHostnameUrl,data=hostnameData,headers=self.headers)
         return updateHostnameResponse
 
@@ -731,6 +781,8 @@ class PapiWrapper(object):
             (credsResponse) Object with all response details.
         """
         credsUrl = 'https://' + self.access_hostname + '/-/client-api/active-grants/implicit'
+        credsUrl = self.formUrl(credsUrl)
+
         credsResponse = session.get(credsUrl)
         return credsResponse
 
@@ -755,6 +807,8 @@ class PapiWrapper(object):
             pass
         else:
             edgehostnameUrl = 'https://' + self.access_hostname + '/papi/v0/edgehostnames/?contractId=' + contractId + '&groupId=' + groupId
+            edgehostnameUrl = self.formUrl(edgehostnameUrl)
+
             edgehostnameResponse = session.get(edgehostnameUrl)
         return edgehostnameResponse
 
@@ -779,6 +833,8 @@ class PapiWrapper(object):
             pass
         else:
             propertiesListUrl = 'https://' + self.access_hostname + '/papi/v1/properties?contractId=' + contractId + '&groupId=' + groupId
+            propertiesListUrl = self.formUrl(propertiesListUrl)
+
             propertiesListResponse = session.get(propertiesListUrl)
         return propertiesListResponse
 
@@ -804,5 +860,22 @@ class PapiWrapper(object):
             pass
         else:
             hostnameListUrl = 'https://' + self.access_hostname + '/papi/v1/properties/' + propertyId + '/versions/' + str(version) + '/hostnames'+ '?contractId=' + contractId + '&groupId=' + groupId
+            hostnameListUrl = self.formUrl(hostnameListUrl)
+
             hostnameListResponse = session.get(hostnameListUrl)
         return hostnameListResponse
+
+    def formUrl(self, url):
+        """
+        Function to form URL
+        """
+        #This is to ensure accountSwitchKey works for internal users
+        if '?' in url:
+            self.account_switch_key = self.account_switch_key.translate(self.account_switch_key.maketrans('?','&'))
+            url = url + self.account_switch_key
+        else:
+            #Replace & with ? if there is no query string in URL
+            self.account_switch_key = self.account_switch_key.translate(self.account_switch_key.maketrans('&','?'))
+            url = url + self.account_switch_key    
+
+        return url        
