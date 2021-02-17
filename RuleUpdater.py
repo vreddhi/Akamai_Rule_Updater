@@ -1,12 +1,26 @@
-'''
-// Good luck with this code. This leverages akamai OPEN API.
-// In case you need
-// explanation contact the initiators.
-Initiators: vbhat@akamai.com and aetsai@akamai.com
-'''
+"""
+Copyright 2017 Akamai Technologies, Inc. All Rights Reserved.
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+    http://www.apache.org/licenses/LICENSE-2.0
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+"""
+
+"""
+This code leverages akamai OPEN API. to control Certificates deployed in Akamai Network.
+In case you need quick explanation contact the initiators.
+Initiators: vbhat@akamai.com, aetsai@akamai.com, mkilmer@akamai.com
+"""
 
 import json
-from akamai.edgegrid import EdgeGridAuth
+import sys
+from akamai.edgegrid import EdgeGridAuth, EdgeRc
 from PapiWrapper import PapiWrapper
 import argparse
 import configparser
@@ -17,302 +31,291 @@ import helper
 import re
 import shutil
 
-#Setup logging
+
+PACKAGE_VERSION = "1.0.8"
+
+# Setup logging
 if not os.path.exists('logs'):
     os.makedirs('logs')
-logFile = os.path.join('logs', 'akamaiconfigkit_log.log')
+log_file = os.path.join('logs', 'ruleupdater.log')
 
-#Set the format of logging in console and file seperately
-logFormatter = logging.Formatter("%(asctime)s [%(threadName)-12.12s] [%(levelname)-5.5s]  %(message)s")
-consoleFormatter = logging.Formatter("%(message)s")
-rootLogger = logging.getLogger()
+# Set the format of logging in console and file separately
+log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+console_formatter = logging.Formatter("%(message)s")
+root_logger = logging.getLogger()
 
+logfile_handler = logging.FileHandler(log_file, mode='a')
+logfile_handler.setFormatter(log_formatter)
+root_logger.addHandler(logfile_handler)
 
-logfileHandler = logging.FileHandler(logFile, mode='w')
-logfileHandler.setFormatter(logFormatter)
-rootLogger.addHandler(logfileHandler)
-
-consoleHandler = logging.StreamHandler()
-consoleHandler.setFormatter(consoleFormatter)
-rootLogger.addHandler(consoleHandler)
-#Set Log Level to DEBUG, INFO, WARNING, ERROR, CRITICAL
-rootLogger.setLevel(logging.INFO)
-
-try:
-    config = configparser.ConfigParser()
-    config.read(os.path.join(os.path.expanduser("~"),'.edgerc'))
-    client_token = config['papi']['client_token']
-    client_secret = config['papi']['client_secret']
-    access_token = config['papi']['access_token']
-    access_hostname = config['papi']['host']
-    session = requests.Session()
-    session.auth = EdgeGridAuth(
-    			client_token = client_token,
-    			client_secret = client_secret,
-    			access_token = access_token
-                )
-except (NameError, AttributeError, KeyError):
-    rootLogger.info('\nLooks like ' + os.path.join(os.path.expanduser("~"),'.edgerc') + ' is missing or has invalid entries\n')
-    exit()
-
-#Main arguments
-parser = argparse.ArgumentParser()
-parser.add_argument("-help",help="Use -h for detailed help options",action="store_true")
-parser.add_argument("-setup",help="Setup a local repository of group and property details",action="store_true")
-parser.add_argument("-downloadRule",help="Download a specific rule in a configuration into json format",action="store_true")
-parser.add_argument("-addRule",help="Add a raw json rule to an existing configuration (before or after and existing rule)",action="store_true")
-parser.add_argument("-addBehavior",help="Add a raw json behavior to an existing rule)",action="store_true")
-parser.add_argument("-updateBehavior",help="Update Behavior",action="store_true")
-parser.add_argument("-deleteBehavior",help="Delete Behavior",action="store_true")
-parser.add_argument("-replaceRule",help="Replace an existing json rule",action="store_true")
-parser.add_argument("-getDetail",help="Retrieves the detailed information about property",action="store_true")
-parser.add_argument("-listRules",help="Retrieves the detailed information about property",action="store_true")
-
-#Additional arguments
-parser.add_argument("-property",help="Property name")
-parser.add_argument("-version",help="version number or the text 'LATEST/PRODUCTION/STAGING' which will fetch the latest version")
-parser.add_argument("-fromVersion",help="Base version number from which the relevant operation is performed")
-parser.add_argument("-outputFilename",help="Filename to be used to save the rule in json format under samplerules folder")
-parser.add_argument("-fromFile",help="Filename to be used to read from the rule template under samplerules folder")
-parser.add_argument("-insertAfter",help="This inserts rule after the rulename specified using -ruleName",action="store_true")
-parser.add_argument("-insertBefore",help="This inserts rule before the rulename specified using -ruleName",action="store_true")
-parser.add_argument("-insertLast",help="This inserts rule at the end of configuration",action="store_true")
-parser.add_argument("-ruleName",help="Rule Name to find")
-parser.add_argument("-comment",help="Version notes to be saved")
-parser.add_argument("-checkoutNewVersion",help="Should the changes be done on a new version? Yes/No")
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(console_formatter)
+root_logger.addHandler(console_handler)
+# Set Log Level to DEBUG, INFO, WARNING, ERROR, CRITICAL
+root_logger.setLevel(logging.INFO)
 
 
+def init_config(edgerc_file, section):
+    if not edgerc_file:
+        if not os.getenv("AKAMAI_EDGERC"):
+            edgerc_file = os.path.join(os.path.expanduser("~"), '.edgerc')
+        else:
+            edgerc_file = os.getenv("AKAMAI_EDGERC")
+
+    if not os.access(edgerc_file, os.R_OK):
+        root_logger.error("Unable to read edgerc file \"%s\"" % edgerc_file)
+        exit(1)
+
+    if not section:
+        if not os.getenv("AKAMAI_EDGERC_SECTION"):
+            section = "papi"
+        else:
+            section = os.getenv("AKAMAI_EDGERC_SECTION")
 
 
-parser.add_argument("-debug",help="DEBUG mode to generate additional logs for troubleshooting",action="store_true")
+    try:
+        edgerc = EdgeRc(edgerc_file)
+        base_url = edgerc.get(section, 'host')
 
-args = parser.parse_args()
+        session = requests.Session()
+        session.auth = EdgeGridAuth.from_edgerc(edgerc, section)
+
+        return base_url, session
+    except configparser.NoSectionError:
+        root_logger.error("Edgerc section \"%s\" not found" % section)
+        exit(1)
+    except Exception:
+        root_logger.info(
+            "Unknown error occurred trying to read edgerc file (%s)" %
+            edgerc_file)
+        exit(1)
 
 
-if not args.setup and not args.downloadRule and not args.addRule and not args.replaceRule and not args.property \
-    and not args.version and not args.outputFilename and not args.fromFile and not args.insertAfter \
-    and not args.insertBefore and not args.insertLast and not args.ruleName and not args.getDetail \
-    and not args.fromVersion and not args.listRules and not args.updateBehavior and not args.comment \
-    and not args.addBehavior:
-    rootLogger.info("Use -h for help options")
-    exit()
+def cli():
+    prog = get_prog_name()
+    if len(sys.argv) == 1:
+        prog += " [command]"
 
-if args.setup:
-    #Delete the setup folder before we start
-    if os.path.exists('setup'):
-        shutil.rmtree('setup')
-    #Create setup folder if it does not exist
-    if not os.path.exists('setup'):
-        os.makedirs('setup')
-    #Create setup/contracts folder if it does not exist
-    contractsFolder = os.path.join('setup','contracts')
-    if not os.path.exists(contractsFolder):
-        os.makedirs(contractsFolder)
-    papiObject = PapiWrapper(access_hostname)
-    rootLogger.info('Setting up pre-requisites')
-    contractsObject = papiObject.getContracts(session)
-    propertiesList = {}
-    if contractsObject.status_code == 200:
-        with open(os.path.join('setup','contracts','contracts.json'),'w') as contractsFile:
-            contractsFile.write(json.dumps(contractsObject.json(), indent = 4))
-        for eachContract in contractsObject.json()['contracts']['items']:
-            contractsName = eachContract['contractTypeName']
-            contractId = eachContract['contractId']
-            propertiesList[contractId] = []
-            #Create contracts folder
-            contractFolder = os.path.join('setup','contracts', contractId)
-            if not os.path.exists(contractFolder):
-                os.makedirs(contractFolder)
+    parser = argparse.ArgumentParser(
+        description='Akamai CLI for RuleUpdater',
+        add_help=False,
+        prog=prog)
+    parser.add_argument(
+        '--version',
+        action='version',
+        version='%(prog)s ' +
+                PACKAGE_VERSION)
 
-            #Create groups folder
-            groupsFolder = os.path.join('setup','contracts',contractId,'groups')
-            if not os.path.exists(groupsFolder):
-                os.makedirs(groupsFolder)
+    subparsers = parser.add_subparsers(
+        title='Commands', dest="command", metavar="")
 
-            #Let us find out the products in this contract now
-            productsObject = papiObject.listProducts(session, contractId=contractId)
-            if productsObject.status_code == 200:
-                with open(os.path.join('setup','contracts',contractId,'products.json'),'w') as productsFile:
-                    productsFile.write(json.dumps(productsObject.json(), indent = 4))
+    actions = {}
+
+    subparsers.add_parser(
+        name="help",
+        help="Show available help",
+        add_help=False).add_argument(
+        'args',
+        metavar="",
+        nargs=argparse.REMAINDER)
+
+    actions["downloadRule"] = create_sub_command(
+        subparsers,
+        "downloadRule",
+        "Download a specific rule in a configuration into json format",
+        [{"name": "outputFilename", "help": "Filename to be used to save the rule in json format under samplerules folder"}],
+        [{"name": "property", "help": "Property name"},
+         {"name": "version", "help": "version number or the text 'LATEST/PRODUCTION/STAGING' which will fetch the latest version"},
+         {"name": "ruleName", "help": "Rule Name to find"}])
+
+    actions["addRule"] = create_sub_command(
+        subparsers, "addRule", "Add a raw json rule to an existing configuration (before or after and existing rule)",
+        [{"name": "insertAfter", "help": "This inserts rule after the rulename specified using -ruleName"},
+         {"name": "insertBefore", "help": "This inserts rule before the rulename specified using -ruleName"},
+         {"name": "insertLast", "help": "This inserts rule at the end of configuration"},
+         {"name": "addVariables", "help": "This declares new variables in the configuration"},
+         {"name": "variableFile", "help": "File containing variable definition. It should be a JSON file with name/value/descripton map"}],
+        [{"name": "property", "help": "Property name"},
+         {"name": "fromVersion", "help": "Base version number from which the relevant operation is performed"},
+         {"name": "fromFile", "help": "Filename to be used to read from the rule template under samplerules folder"},
+         {"name": "ruleName", "help": "Rule Name to find"},
+         {"name": "comment", "help": "Version notes to be saved"}])
+
+    actions["replaceRule"] = create_sub_command(
+        subparsers, "replaceRule", "Replace an existing json rule",
+        [],
+        [{"name": "property", "help": "Property name"},
+         {"name": "fromVersion", "help": "Base version number from which the relevant operation is performed"},
+         {"name": "fromFile", "help": "Filename to be used to read from the rule template under samplerules folder"},
+         {"name": "ruleName", "help": "Rule Name to find"},
+         {"name": "comment", "help": "Version notes to be saved"}])
+
+    actions["deleteRule"] = create_sub_command(
+        subparsers, "deleteRule",
+        "Delete an existing rule)",
+        [],
+        [{"name": "property", "help": "Property name"},
+         {"name": "version", "help": "Please enter the version to use/create from using --version."},
+         {"name": "comment", "help": "Please enter the comment/version notes using --comment."},
+         {"name": "ruleName", "help": "Please enter the rule name where behavior needs to be added."},
+         {"name": "checkoutNewVersion", "help": "Please enter whether to create a new version or use existing version using -checkoutNewVersion YES/NO."},])
+
+    actions["getDetail"] = create_sub_command(
+        subparsers, "getDetail",
+        "Retrieves the detailed information about property ",
+        [{"name": "fromVersion", "help": "Base version number from which the relevant operation is performed"}],
+        [{"name": "property", "help": "Property name"}])         
+
+    actions["listRules"] = create_sub_command(
+        subparsers, "listRules", "Retrieves the detailed information about property",
+        [],
+        [{"name": "property", "help": "Property name"},
+         {"name": "version", "help": "version number or the text LATEST"}])
+
+    actions["addBehavior"] = create_sub_command(
+        subparsers, "addBehavior",
+        "Add a raw json behavior to an existing rule",
+        [],
+        [{"name": "property", "help": "Property name"},
+         {"name": "version", "help": "Please enter the version to use/create from using --version."},
+         {"name": "fromFile", "help": "Please enter the filename containing rule(s) using --fromFile."},
+         {"name": "comment", "help": "Please enter the comment/version notes using --comment."},
+         {"name": "ruleName", "help": "Please enter the rule name where behavior needs to be added."},
+         {"name": "checkoutNewVersion", "help": "Please enter whether to create a new version or use existing version using -checkoutNewVersion YES/NO."},])
+
+    actions["deleteBehavior"] = create_sub_command(
+        subparsers, "deleteBehavior", "Delete Behavior",
+        [],
+        [{"name": "property", "help": "Property name"},
+         {"name": "version", "help": "Please enter the version to use/create from using --version."},
+         {"name": "behaviorName", "help": "Name of the behavior to be deleted."}])
+
+    args = parser.parse_args()
+
+    if len(sys.argv) <= 1:
+        parser.print_help()
+        return 0
+
+    if args.command == "help":
+        if len(args.args) > 0:
+            if actions[args.args[0]]:
+                actions[args.args[0]].print_help()
+        else:
+            parser.prog = get_prog_name() + " help [command]"
+            parser.print_help()
+        return 0
+
+
+    # Override log level if user wants to run in debug mode
+    # Set Log Level to DEBUG, INFO, WARNING, ERROR, CRITICAL
+    if args.debug:
+        root_logger.setLevel(logging.DEBUG)
+
+    return getattr(sys.modules[__name__], args.command.replace("-", "_"))(args)
+
+
+def create_sub_command(
+        subparsers,
+        name,
+        help,
+        optional_arguments=None,
+        required_arguments=None):
+    action = subparsers.add_parser(name=name, help=help, add_help=False)
+
+    if required_arguments:
+        required = action.add_argument_group("required arguments")
+        for arg in required_arguments:
+            name = arg["name"]
+            del arg["name"]
+            required.add_argument("--" + name,
+                                  required=True,
+                                  **arg)
+
+    optional = action.add_argument_group("optional arguments")
+    if optional_arguments:
+        for arg in optional_arguments:
+            name = arg["name"]
+            del arg["name"]
+            if name == 'insertAfter' or name == 'insertBefore' or name == 'insertLast' \
+            or name == 'addVariables':
+                optional.add_argument(
+                    "--" + name,
+                    required=False,
+                    **arg,
+                    action="store_true")
             else:
-                rootLogger.info('WARNING: Unable to fetch products for contract ' + contractId)
+                optional.add_argument("--" + name,
+                                      required=False,
+                                      **arg)
 
-            #Create master properties.json file under each contract folder
-            with open(os.path.join('setup','contracts',contractId,'properties.json'),'w') as propertiesFileHandler:
-                #Do Nothing
-                pass
+    optional.add_argument(
+        "--edgerc",
+        help="Location of the credentials file [$AKAMAI_EDGERC]",
+        default=os.path.join(
+            os.path.expanduser("~"),
+            '.edgerc'))
 
-            #Create master edgehostname.json file under each contract folder
-            with open(os.path.join('setup','contracts',contractId,'edgehostnames.json'),'w') as edgehostnameFileHandler:
-                #Do Nothing
-                pass
+    optional.add_argument(
+        "--section",
+        help="Section of the credentials file [$AKAMAI_EDGERC_SECTION]",
+        default="papi")
 
-            #Create master edgehostname.json file under each contract folder
-            with open(os.path.join('setup','contracts',contractId,'groups.json'),'w') as GroupsFileHandler:
-                #Do Nothing
-                pass
-    else:
-        rootLogger.info('Unable to fetch Contract related info, use -debug option to know more')
-        rootLogger.debug(json.dumps(contractsObject.json(), indent = 4))
+    optional.add_argument(
+        "--debug",
+        help="DEBUG mode to generate additional logs for troubleshooting",
+        action="store_true")
 
-    #Lets now move towards groups
-    #Groups API call does not take contractId, so some advanced logic to parse response
-    groupsObject = papiObject.getGroups(session)
-    if groupsObject.status_code == 200:
-        #rootLogger.info(json.dumps(groupsObject.json(), indent = 4))
-        for everyGroup in groupsObject.json()['groups']['items']:
-            groupName = everyGroup['groupName']
-            groupId = everyGroup['groupId']
-            rootLogger.info('-------------- *************** --------------')
-            rootLogger.info('Processing group: ' + groupName)
-            if 'contractIds' in everyGroup:
-                for everyContract in everyGroup['contractIds']:
-                    #Logic to extract group info and move it to right contract folder
-                    contractId = everyContract
-                    try:
-                        #Update the master groups file
-                        with open(os.path.join('setup','contracts',contractId,'groups.json'),'a') as GroupsFileHandler:
-                            GroupsFileHandler.write(json.dumps(everyGroup, indent = 4))
-                        #Create individual groups file
-                        groupFile = groupName + '.json'
-                        with open(os.path.join(groupsFolder,groupFile), 'w') as groupFileHandler:
-                            groupFileHandler.write(json.dumps(everyGroup, indent = 4))
-                    except FileNotFoundError:
-                        rootLogger.info('Unable to write file ' + groupName + '.json')
+    optional.add_argument(
+        "--account-key",
+        help="Account Switch Key",
+        default="")
 
-                    #Lets now move to create properties folder
-                    #Logic to extract properties info and move it to right contract folder
-                    propertiesFolder = os.path.join('setup','contracts',contractId,'properties')
-                    if not os.path.exists(propertiesFolder):
-                        os.makedirs(propertiesFolder)
-                    rootLogger.info('Fetching Properties info of group: ' + groupName)
-                    propertiesObject = papiObject.getAllProperties(session, contractId, groupId)
-
-                    if propertiesObject.status_code == 200:
-                        #Remove the unwanted data
-                        for everyProperty in propertiesObject.json()['properties']['items']:
-                            if 'accountId' in everyProperty: del everyProperty['accountId']
-                            if 'latestVersion' in everyProperty: del everyProperty['latestVersion']
-                            if 'stagingVersion' in everyProperty: del everyProperty['stagingVersion']
-                            if 'productionVersion' in everyProperty: del everyProperty['productionVersion']
-                            if 'note' in everyProperty: del everyProperty['note']
-
-                            propertyName = everyProperty['propertyName']
-                            propertyFile = everyProperty['propertyName'] + '.json'
-                            try:
-                                with open(os.path.join(propertiesFolder,propertyFile), 'w') as propertyFileHandler:
-                                    propertyFileHandler.write(json.dumps(everyProperty, indent = 4))
-                            except FileNotFoundError:
-                                rootLogger.info('Unable to write file ' + propertyName + '.json')
-                            #Update the propertiesList list with property details
-                            propertiesList[contractId].append(everyProperty)
-                    else:
-                        rootLogger.info('Unable to fetch properties info for group: ' + groupId + ' contract: ' + contractId)
-
-                    #Let us now focus on edgehostnames
-                    edgehostnamesFolder = os.path.join('setup','contracts',contractId,'edgehostnames')
-                    #PAPI edgehostname calls to parent groupIDs also give child groupID edgehostnames. To avoid duplication we are using groupID which has no parents
-                    if 'parentGroupId' not in everyGroup:
-                        print ("Master groupID is ",groupId)
-                        if not os.path.exists(edgehostnamesFolder):
-                            os.makedirs(edgehostnamesFolder)
-                        rootLogger.info('Fetching EdgeHostname details under group: ' + groupName)
-                        edgehostnameObject = papiObject.listEdgeHostnames(session, contractId=contractId, groupId=groupId)
-                        if edgehostnameObject.status_code == 200:
-                            for everyEdgeHostNameDetail in edgehostnameObject.json()['edgeHostnames']['items']:
-                                edgeHostnameDomain = everyEdgeHostNameDetail['edgeHostnameDomain']
-                                edgehostnameFile = everyEdgeHostNameDetail['edgeHostnameDomain'] + '.json'
-                                try:
-                                    edgehostnamesFile = groupName + '.json'
-                                    with open(os.path.join(edgehostnamesFolder,edgehostnameFile), 'w') as edgehostnameFileHandler:
-                                        edgehostnameFileHandler.write(json.dumps(everyEdgeHostNameDetail, indent = 4))
-                                except FileNotFoundError:
-                                    rootLogger.info('Unable to write file ' + edgeHostnameDomain + '.json')
-                                #Update the master edgehostname.json file under each contract
-                                with open(os.path.join('setup','contracts',contractId,'edgehostnames.json'),'a') as edgehostnamesFileHandler:
-                                    edgehostnamesFileHandler.write(',')
-                                    edgehostnamesFileHandler.write(json.dumps(everyEdgeHostNameDetail, indent = 4))
-                                    edgehostnamesFileHandler.write(',')
-                        else:
-                            rootLogger.info('Unable to retrieve edgehostname details under group: ' + groupName + ' contract: ' + contractId)
-                    else:
-                        rootLogger.info('Couldnt find master group ID')
-                rootLogger.info('-------------- *************** --------------\n\n')
-            else:
-                rootLogger.info('Ignoring  Group: ' + groupName + ' as it is not associated to any Contract' )
-
-        #Update the master propeties.json file under each contract
-        for contractItem in propertiesList:
-            with open(os.path.join('setup','contracts',contractItem,'properties.json'),'w') as propertiesFileHandler:
-                propertiesFileHandler.write(json.dumps(propertiesList[contractItem], indent = 4))
-    else:
-        rootLogger.info('Unable to fetch group related information')
-
-    #Remove the last comma in the master files
-    for (dirPath, dirNames, filenames) in os.walk(os.getcwd()):
-        for everyFilename in filenames:
-            if everyFilename == 'properties.json' or everyFilename == 'edgehostname.json':
-                with open(os.path.join('setup','contracts',contractId,everyFilename),'r+') as masterFileHandler:
-                    masterFileContent = masterFileHandler.read().rstrip(',')
-                    masterFileContent = masterFileHandler.read().lstrip(',')
-                    masterFileHandler.write(masterFileContent)
-
-#Do not move this above setup code - START
-if not os.path.exists('setup'):
-    print('\nRun -setup to build local cache. This is one time task to reduce number of API calls\n')
-    exit()
-#Do not move this above setup code - END
+    return action
 
 
-if args.downloadRule:
-    papiObject = PapiWrapper(access_hostname)
-    if not args.property:
-        rootLogger.info('Please enter property name using -property.')
-        exit()
-    if not args.version:
-        rootLogger.info('Please enter the version using -version.')
-        exit()
-    if not args.ruleName:
-        rootLogger.info('Please enter the rule name using -ruleName.')
-        exit()
+def downloadRule(args):
+    access_hostname, session = init_config(args.edgerc, args.section)
+    papiObject = PapiWrapper(access_hostname, args.account_key)
 
     #Find the property details (IDs)
-    propertyDetails = helper.getPropertyDetailsFromLocalStore(args.property)
-    #Check if it not an empty response
-    if propertyDetails:
-        rootLogger.info('Found Property Details: ')
-        rootLogger.info('contractId: ' + propertyDetails['contractId'])
-        rootLogger.info('groupId: ' + propertyDetails['groupId'] )
-        rootLogger.info('propertyId: ' + propertyDetails['propertyId']+ '\n')
-        pass
+    propertyResponse = papiObject.searchProperty(session,propertyName=args.property)
+    if propertyResponse.status_code == 200:
+        try:
+            propertyDetails = propertyResponse.json()['versions']['items'][0]
+        except:
+            root_logger.info('Property details were not found. Double check property name\n')
+            exit()                
     else:
-        rootLogger.info('Property details were not found. Try running setup again, or double check property name\n')
-        exit()
+       root_logger.info('Property details were not found. Double check property name\n')
 
     #Fetch the latest version if need be
     if args.version.upper() == 'latest'.upper():
-        rootLogger.info('Fetching latest version.')
+        root_logger.info('Fetching latest version.')
         versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn=args.version.upper(), propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
         if versionResponse.status_code == 200:
             version = versionResponse.json()['versions']['items'][0]['propertyVersion']
-            rootLogger.info('Latest version is: v' + str(version) + '\n')
+            root_logger.info('Latest version is: v' + str(version) + '\n')
+        else:
+            root_logger.info('Unable to find the version details\n')
+            root_logger.info(json.dumps(versionResponse.json(), indent=4))    
+            exit()
     else:
         version = args.version
         #Validate the version number entered using -version
-        rootLogger.info('Fetching version ' + args.version + ' ...')
+        root_logger.info('Fetching version ' + args.version + ' ...')
         versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn='LATEST', propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
         latestversion = versionResponse.json()['versions']['items'][0]['propertyVersion']
         if int(args.version) > int(latestversion):
-            rootLogger.info('Please check the version number. The latest version is: ' + str(latestversion) + '\n')
+            root_logger.info('Please check the version number. The latest version is: ' + str(latestversion) + '\n')
             exit()
         else:
-            rootLogger.info('Found version...\n')
+            root_logger.info('Found version...\n')
 
     #Let us now move towards rules
     #All rules are saved in samplerules folder, filename is configurable
-    rootLogger.info('Fetching property rules...')
-    rootLogger.info('Searching for Rule: ' + args.ruleName + '\n')
-    ruleName = args.ruleName
+    root_logger.info('Fetching property rules...')
+    root_logger.info('Searching for Rule: ' + args.ruleName + '\n')
+    
     if not os.path.exists(os.path.join('samplerules')):
         os.mkdir(os.path.join('samplerules'))
 
@@ -327,47 +330,40 @@ if args.downloadRule:
     if propertyContent.status_code == 200:
         jsonRuleAndCount = helper.getRule([propertyContent.json()['rules']], args.ruleName)
         if jsonRuleAndCount['ruleCount'] > 1:
-            rootLogger.info('\nMultiple Rules named: "' + args.ruleName + '" exist, please check configuration\n')
+            root_logger.info('\nMultiple Rules named: "' + args.ruleName + '" exist, please check configuration\n')
             exit()
         elif jsonRuleAndCount['ruleCount'] == 1:
-            rootLogger.info('Found rule...')
+            root_logger.info('Found rule...')
             with open(os.path.join('samplerules',filename),'w') as rulesFileHandler:
                 rulesFileHandler.write(json.dumps(jsonRuleAndCount['ruleContent'], indent=4))
-                rootLogger.info('Rule file is saved in: ' + os.path.join('samplerules',filename))
+                root_logger.info('Rule file is saved in: ' + os.path.join('samplerules',filename))
         else:
-            rootLogger.info('Rule: ' + args.ruleName + ' is not found. Please check configuration.')
+            root_logger.info('Rule: ' + args.ruleName + ' is not found. Please check configuration.')
             exit()
     else:
-        rootLogger.info('Unable to fecth property rules.')
+        root_logger.info('Unable to fecth property rules.')
         exit()
 
-if args.addRule or args.replaceRule:
-    papiObject = PapiWrapper(access_hostname)
-    if not args.property:
-        rootLogger.info('\nPlease enter property name using -property.')
-        exit()
-    if not args.fromVersion:
-        rootLogger.info('\nPlease enter the version to create from using -fromVersion.')
-        exit()
-    if not args.fromFile:
-        rootLogger.info('\nPlease enter the filename containing rule(s) using -fromFile.')
-        exit()
+def addRule(args):
+    access_hostname, session = init_config(args.edgerc, args.section)
+    papiObject = PapiWrapper(access_hostname, args.account_key)
+
     #Check for existence of file
     try:
         with open(os.path.join('samplerules',args.fromFile),'r') as rulesFileHandler:
             pass
     except FileNotFoundError:
-        rootLogger.info('\nEntered filename does not exist. Ensure file is present in samplerules directory.')
+        root_logger.info('\nEntered filename does not exist. Ensure file is present in samplerules directory.')
         exit()
 
-    if args.addRule:
+    if args.command == 'addRule':
         if not args.insertAfter and not args.insertBefore and not args.insertLast:
-            rootLogger.info('Specify where to add the rule to using -insertAfter or -insertBefore or -insertLast.\n')
+            root_logger.info('Specify where to add the rule to using -insertAfter or -insertBefore or -insertLast.\n')
             exit()
 
         if args.insertAfter or args.insertBefore:
             if not args.ruleName:
-                rootLogger.info('\nPlease enter the rule name using -ruleName.\n')
+                root_logger.info('\nPlease enter the rule name using -ruleName.\n')
                 exit()
             if args.insertAfter:
                 whereTo = 'insertAfter'
@@ -381,54 +377,65 @@ if args.addRule or args.replaceRule:
             comment = 'at the end'
             args.ruleName = 'default'
 
-    if args.replaceRule:
+    if args.command == 'replaceRule':
         whereTo = 'replace'
         if not args.ruleName:
-            rootLogger.info('\nPlease enter the rule name to be replaced using -ruleName.\n')
+            root_logger.info('\nPlease enter the rule name to be replaced using -ruleName.\n')
             exit()
 
     version = args.fromVersion
+    
     #Find the property details (IDs)
-    propertyDetails = helper.getPropertyDetailsFromLocalStore(args.property)
-    #Check if it not an empty response
-    if propertyDetails:
-        rootLogger.info('Found Property Details:')
-        rootLogger.info('contractId: ' + propertyDetails['contractId'])
-        rootLogger.info('groupId: ' + propertyDetails['groupId'] )
-        rootLogger.info('propertyId: ' + propertyDetails['propertyId']+ '\n')
-        pass
+    propertyResponse = papiObject.searchProperty(session,propertyName=args.property)
+    if propertyResponse.status_code == 200:
+        try:
+            propertyDetails = propertyResponse.json()['versions']['items'][0]
+        except:
+            root_logger.info('Property details were not found. Double check property name\n')
+            exit()                
     else:
-        rootLogger.info('Property details were not found. Try running setup again, or double check property name\n')
-        exit()
+       root_logger.info('Property details were not found. Double check property name\n') 
 
     #Fetch the latest version if need be
-    rootLogger.info('Fetching version ' + version + ' ...')
+    root_logger.info('Fetching version ' + version + ' ...')
     if version.upper() == 'latest'.upper():
         versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn=version.upper(), propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
         version = versionResponse.json()['versions']['items'][0]['propertyVersion']
-        rootLogger.info('Latest version is: v' + str(version) + '\n')
+        root_logger.info('Latest version is: v' + str(version) + '\n')
     else:
         #Validate the version number entered using -fromVersion
         versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn='LATEST', propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
         latestversion = versionResponse.json()['versions']['items'][0]['propertyVersion']
         if int(version) > int(latestversion):
-            rootLogger.info('Please check the version number. The highest/latest version is: ' + str(latestversion) + '\n')
+            root_logger.info('Please check the version number. The highest/latest version is: ' + str(latestversion) + '\n')
             exit()
         else:
-            rootLogger.info('Found Version...\n')
+            root_logger.info('Found Version...\n')
 
     #Let us now move towards rules
     #All rules are saved in samplerules folder, filename is configurable
-    rootLogger.info('Fetching existing property rules...')
+    root_logger.info('Fetching existing property rules...')
     propertyContent = papiObject.getPropertyRulesfromPropertyId(session, propertyDetails['propertyId'], version, propertyDetails['contractId'], propertyDetails['groupId'])
     if propertyContent.status_code == 200:
         completePropertyJson = propertyContent.json()
         with open(os.path.join('samplerules',args.fromFile),'r') as rulesFileHandler:
             newRuleSet = json.loads(rulesFileHandler.read())
 
-        rootLogger.info('\nFound rule file: ' + args.fromFile)
+        root_logger.info('\nFound rule file: ' + args.fromFile)
+
+
+        if args.addVariables and not args.variableFile:
+            root_logger.info('\n--variableFile <file with variables list> is needed to add variables \n')
+            exit()
+        if args.addVariables and args.variableFile:
+            with open(args.variableFile,'r') as variablesFileHandler:
+                newVariables = json.loads(variablesFileHandler.read())            
+            newVariablesList = helper.addVariables(completePropertyJson['rules']['variables'], newVariables)
+        
+        #Replace the variables 
+        completePropertyJson['rules']['variables'] = newVariablesList
         updatedCompleteRuleSet = helper.insertRule([completePropertyJson['rules']], newRuleSet, args.ruleName, whereTo)
-        #rootLogger.info(json.dumps(updatedCompleteRuleSet))
+        #root_logger.info(json.dumps(updatedCompleteRuleSet))
         #Check if we found the matching rule
         if updatedCompleteRuleSet['occurances'] > 0:
             #Check whether we found multiple rule names, if yes warn the user
@@ -436,7 +443,7 @@ if args.addRule or args.replaceRule:
                 #Overwrite the rules section with updated one
                 completePropertyJson['rules'] = updatedCompleteRuleSet['completeRuleSet'][0]
                 #Updating the property comments
-                if args.replaceRule:
+                if args.command == 'replaceRule':
                     finalComment = completePropertyJson['comments'] = 'Created from v' + str(version) + ': Replaced existing rule "' + args.ruleName + '" with rule from: '+ args.fromFile
                 elif comment == 'at the end':
                     finalComment = completePropertyJson['comments'] = 'Created from v' + str(version) + ': Added rule ' + newRuleSet['name'] + ' ' + comment
@@ -444,60 +451,59 @@ if args.addRule or args.replaceRule:
                     finalComment = completePropertyJson['comments'] = 'Created from v' + str(version) + ': Added rule ' + newRuleSet['name'] + ' '+ comment + ' ' + args.ruleName + ' rule'
 
                 #Let us now create a version
-                rootLogger.info('Trying to create a new version of this property based on version ' + str(version))
+                root_logger.info('Trying to create a new version of this property based on version ' + str(version))
                 versionResponse = papiObject.createVersion(session, baseVersion=version, property_name=args.property)
                 if versionResponse.status_code == 201:
                     #Extract the version number
                     matchPattern = re.compile('/papi/v0/properties/prp_.*/versions/(.*)(\?.*)')
                     newVersion = matchPattern.match(versionResponse.json()['versionLink']).group(1)
-                    rootLogger.info('Successfully created new property version: v' + str(newVersion))
+                    root_logger.info('Successfully created new property version: v' + str(newVersion))
                     #Make a call to update the rules
-                    rootLogger.info('\nNow trying to upload the new ruleset...')
+                    root_logger.info('\nNow trying to upload the new ruleset...')
                     uploadRulesResponse = papiObject.uploadRules(session=session, updatedData=json.loads(json.dumps(completePropertyJson)),\
                      property_name=args.property, version=newVersion, propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
                     if uploadRulesResponse.status_code == 200:
-                        rootLogger.info('\nSuccess! Comments: "' + finalComment + '"\n')
+                        root_logger.info('\nSuccess! Comments: "' + finalComment + '"\n')
                     else:
-                        rootLogger.info('Unable to update rules in property. Reason is: \n\n' + json.dumps(uploadRulesResponse.json(), indent=4))
+                        root_logger.info('Unable to update rules in property. Reason is: \n\n' + json.dumps(uploadRulesResponse.json(), indent=4))
                         exit()
                 else:
-                    rootLogger.info('Unable to create a new version.')
+                    root_logger.info('Unable to create a new version.')
                     exit()
             else:
-                rootLogger.info('\nError: Found ' + str(updatedCompleteRuleSet['occurances']) + ' occurrences of the rule: "' + args.ruleName + '"' + '. Please check configuration. Exiting...')
+                root_logger.info('\nError: Found ' + str(updatedCompleteRuleSet['occurances']) + ' occurrences of the rule: "' + args.ruleName + '"' + '. Please check configuration. Exiting...')
         else:
-            rootLogger.info('\nUnable to find rule: "' + args.ruleName + '" in this property.')
-            rootLogger.info('Check the -rulename value or run -getDetail to list existing rules for this property.')
+            root_logger.info('\nUnable to find rule: "' + args.ruleName + '" in this property.')
+            root_logger.info('Check the -rulename value or run -getDetail to list existing rules for this property.')
             exit()
     else:
-        rootLogger.info('Unable to fetch property rules.')
-        exit()
+        root_logger.info('Unable to fetch property rules.')
+        exit()    
 
-if args.getDetail:
-    papiObject = PapiWrapper(access_hostname)
-    if not args.property:
-        rootLogger.info('Please enter property name using -property.')
-        exit()
+def replaceRule(args):
+    addRule(args)
+
+def getDetail(args):
+    access_hostname, session = init_config(args.edgerc, args.section)
+    papiObject = PapiWrapper(access_hostname, args.account_key)
 
     #Find the property details (IDs)
-    propertyDetails = helper.getPropertyDetailsFromLocalStore(args.property)
-    #Check if it not an empty response
-    if propertyDetails:
-        rootLogger.info('Found Property Details: ')
-        rootLogger.info('contractId: ' + propertyDetails['contractId'])
-        rootLogger.info('groupId: ' + propertyDetails['groupId'] )
-        rootLogger.info('propertyId: ' + propertyDetails['propertyId']+ '\n')
-        pass
+    propertyResponse = papiObject.searchProperty(session,propertyName=args.property)
+    if propertyResponse.status_code == 200:
+        try:
+            propertyDetails = propertyResponse.json()['versions']['items'][0]
+        except:
+            root_logger.info('Property details were not found. Double check property name\n')
+            exit()                
     else:
-        rootLogger.info('Property details were not found. Try running setup again, or double check property name\n')
-        exit()
+       root_logger.info('Property details were not found. Double check property name\n')    
 
-    rootLogger.info('Fetching property versions...\n')
+    root_logger.info('Fetching property versions...\n')
     versionsResponse = papiObject.listVersions(session, property_name=args.property, propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
     if versionsResponse.status_code == 200:
-        rootLogger.info('Current Property Details:')
-        rootLogger.info('----------------------------------')
-        #rootLogger.info(json.dumps(versionsResponse.json(), indent=4))
+        root_logger.info('Current Property Details:')
+        root_logger.info('----------------------------------')
+        #root_logger.info(json.dumps(versionsResponse.json(), indent=4))
         latestVersion = 0
         stagingVersion = 0
         productionVersion = 0
@@ -516,113 +522,104 @@ if args.getDetail:
                 productionVersion = everyVersionDetail['propertyVersion']
                 if 'note' in everyVersionDetail:
                     productionNote = everyVersionDetail['note']
-        rootLogger.info('Version ' + str(latestVersion) + ' is latest')
+        root_logger.info('Version ' + str(latestVersion) + ' is latest')
         if stagingVersion != 0:
-            rootLogger.info('Version ' + str(stagingVersion) + ' is live in staging')
+            root_logger.info('Version ' + str(stagingVersion) + ' is live in staging')
         if stagingVersion == 0:
-            rootLogger.info('No version is active in staging')
+            root_logger.info('No version is active in staging')
         if productionVersion != 0:
-            rootLogger.info('Version ' + str(productionVersion) + ' is live in production')
+            root_logger.info('Version ' + str(productionVersion) + ' is live in production')
         if productionVersion == 0:
-            rootLogger.info('No version is active in production')
-        #rootLogger.info('Version ' + str(latestVersion) + ' is the latest version')
+            root_logger.info('No version is active in production')
+        #root_logger.info('Version ' + str(latestVersion) + ' is the latest version')
 
-        #comment this out for now? rootLogger.info('\nLast 10 versions...\n')
-        rootLogger.info('\nVersion Details (Version : Description)')
-        rootLogger.info('----------------------------------')
+        #comment this out for now? root_logger.info('\nLast 10 versions...\n')
+        root_logger.info('\nVersion Details (Version : Description)')
+        root_logger.info('----------------------------------')
 
         if args.fromVersion:
             for everyVersionDetail in versionsResponse.json()['versions']['items']:
                 if int(everyVersionDetail['propertyVersion']) >= int(args.fromVersion):
                     if 'note' in everyVersionDetail:
-                        rootLogger.info('v' + str(everyVersionDetail['propertyVersion']) + ' : ' + everyVersionDetail['note'])
+                        root_logger.info('v' + str(everyVersionDetail['propertyVersion']) + ' : ' + everyVersionDetail['note'])
                     else:
-                        rootLogger.info('v' + str(everyVersionDetail['propertyVersion']) + ' : ')
+                        root_logger.info('v' + str(everyVersionDetail['propertyVersion']) + ' : ')
         else:
             for everyVersionDetail in versionsResponse.json()['versions']['items'][:10]:
                 if 'note' in everyVersionDetail:
-                    rootLogger.info('v' + str(everyVersionDetail['propertyVersion']) + ' : ' + everyVersionDetail['note'])
+                    root_logger.info('v' + str(everyVersionDetail['propertyVersion']) + ' : ' + everyVersionDetail['note'])
                 else:
-                    rootLogger.info('v' + str(everyVersionDetail['propertyVersion']) + ' : ')
+                    root_logger.info('v' + str(everyVersionDetail['propertyVersion']) + ' : ')
     else:
-        rootLogger.info('Unable to fetch versions of the property')
-        rootLogger.info(json.dumps(versionsResponse.json(), indent=4))
-        exit()
+        root_logger.info('Unable to fetch versions of the property')
+        root_logger.info(json.dumps(versionsResponse.json(), indent=4))
+        exit()        
 
-if args.listRules:
-    papiObject = PapiWrapper(access_hostname)
-    if not args.property:
-        rootLogger.info('\nPlease enter property name using -property.')
-        exit()
-    if not args.version:
-        rootLogger.info('\nPlease enter the version using -version.')
-        exit()
+def listRules(args):
+    access_hostname, session = init_config(args.edgerc, args.section)
+    papiObject = PapiWrapper(access_hostname, args.account_key)
 
     #Find the property details (IDs)
-    propertyDetails = helper.getPropertyDetailsFromLocalStore(args.property)
-    #Check if it not an empty response
-    if propertyDetails:
-        rootLogger.info('Found Property Details: ')
-        rootLogger.info('contractId: ' + propertyDetails['contractId'])
-        rootLogger.info('groupId: ' + propertyDetails['groupId'] )
-        rootLogger.info('propertyId: ' + propertyDetails['propertyId']+ '\n')
-        pass
+    propertyResponse = papiObject.searchProperty(session,propertyName=args.property)
+    if propertyResponse.status_code == 200:
+        try:
+            propertyDetails = propertyResponse.json()['versions']['items'][0]
+        except:
+            root_logger.info('Property details were not found. Double check property name\n')
+            exit()                
     else:
-        rootLogger.info('Property details were not found. Try running setup again, or double check property name\n')
-        exit()
+       root_logger.info('Property details were not found. Double check property name\n') 
 
     #Fetch the latest version if need be
-    rootLogger.info('Fetching version ' + args.version + ' ...')
+    root_logger.info('Fetching version ' + args.version + ' ...')
     if args.version.upper() == 'latest'.upper():
         versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn=args.version.upper(), propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
         version = versionResponse.json()['versions']['items'][0]['propertyVersion']
-        rootLogger.info('Latest version is: v' + str(version) + '\n')
+        root_logger.info('Latest version is: v' + str(version) + '\n')
     else:
         version = args.version
         #Validate the version number entered using -version
         versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn='LATEST', propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
         latestversion = versionResponse.json()['versions']['items'][0]['propertyVersion']
         if int(args.version) > int(latestversion):
-            rootLogger.info('Please check the version number. The highest/latest version is: ' + str(latestversion) + '\n')
+            root_logger.info('Please check the version number. The highest/latest version is: ' + str(latestversion) + '\n')
             exit()
         else:
-            rootLogger.info('Found version...\n')
+            root_logger.info('Found version...\n')
 
-    rootLogger.info('Fetching property rules...\n')
+    root_logger.info('Fetching property rules...\n')
     propertyContent = papiObject.getPropertyRulesfromPropertyId(session, propertyDetails['propertyId'], version, propertyDetails['contractId'], propertyDetails['groupId'])
     if propertyContent.status_code == 200:
         rules = helper.getAllRules([propertyContent.json()['rules']], allruleNames=[])
-        rootLogger.info('Rules are:')
-        rootLogger.info('---------\n')
+        root_logger.info('Rules are:')
+        root_logger.info('---------')
         for eachRuleName in rules:
-            rootLogger.info(eachRuleName)
+            root_logger.info(eachRuleName)
     else:
-        rootLogger.info('Unable to fecth rules of property.')
+        root_logger.info('Unable to fecth rules of property.')
         exit()
 
-if args.addBehavior:
-    if not os.path.exists('setup'):
-        print('\nRun -setup to build local cache. This is one time task to reduce number of API calls\n')
-        exit()
+def addBehavior(args):
+    access_hostname, session = init_config(args.edgerc, args.section)
+    papiObject = PapiWrapper(access_hostname, args.account_key)
 
-    papiObject = PapiWrapper(access_hostname)
     if not args.property:
-        rootLogger.info('\nPlease enter property name using -property.')
+        root_logger.info('\nPlease enter property name using -property.')
         exit()
     if not args.version:
-        rootLogger.info('\nPlease enter the version to use/create from using -version.')
+        root_logger.info('\nPlease enter the version to use/create from using -version.')
         exit()
     if not args.fromFile:
-        rootLogger.info('\nPlease enter the filename containing rule(s) using -fromFile.')
+        root_logger.info('\nPlease enter the filename containing rule(s) using -fromFile.')
         exit()
     if not args.comment:
-        rootLogger.info('\nPlease enter the comment/version notes using -comment.')
+        root_logger.info('\nPlease enter the comment/version notes using -comment.')
         exit()
     if not args.ruleName:
-        rootLogger.info('\nPlease enter the rule name where behavior needs to be added.\n')
+        root_logger.info('\nPlease enter the rule name where behavior needs to be added.\n')
         exit()
     if not args.checkoutNewVersion:
-        rootLogger.info('\nPlease enter whether to create a new version or use existing version using -checkoutNewVersion YES/NO.\n')
+        root_logger.info('\nPlease enter whether to create a new version or use existing version using -checkoutNewVersion YES/NO.\n')
         exit()
 
 
@@ -631,35 +628,34 @@ if args.addBehavior:
         with open(os.path.join(args.fromFile),'r') as rulesFileHandler:
             pass
     except FileNotFoundError:
-        rootLogger.info('\nEntered filename does not exist. Ensure file with behavior details is present')
+        root_logger.info('\nEntered filename does not exist. Ensure file with behavior details is present')
         exit()
 
     version = args.version
+    
     #Find the property details (IDs)
-    propertyDetails = helper.getPropertyDetailsFromLocalStore(args.property)
-    #Check if it not an empty response
-    if propertyDetails:
-        rootLogger.info('Found Property Details:')
-        rootLogger.info('contractId: ' + propertyDetails['contractId'])
-        rootLogger.info('groupId: ' + propertyDetails['groupId'] )
-        rootLogger.info('propertyId: ' + propertyDetails['propertyId']+ '\n')
-        pass
+    propertyResponse = papiObject.searchProperty(session,propertyName=args.property)
+    if propertyResponse.status_code == 200:
+        try:
+            propertyDetails = propertyResponse.json()['versions']['items'][0]
+        except:
+            root_logger.info('Property details were not found. Double check property name\n')
+            exit()                
     else:
-        rootLogger.info('Property details were not found. Try running setup again, or double check property name\n')
-        exit()
+       root_logger.info('Property details were not found. Double check property name\n') 
 
 
     if args.checkoutNewVersion.upper() == 'YES':
         #Checkout a version based on version number or production or staging or latest version or version number
         if args.version.upper() == 'PRODUCTION' or args.version.upper() == 'STAGING' \
         or args.version.upper() == 'LATEST':
-            rootLogger.info('Fetching and verifying ' + version + ' version...')
+            root_logger.info('Fetching and verifying ' + version + ' version...')
             versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn=version.upper(), propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
             if versionResponse.status_code == 200:
                 version = versionResponse.json()['versions']['items'][0]['propertyVersion']
-                rootLogger.info(args.version + ' version is: v' + str(version) + '\n')
+                root_logger.info(args.version + ' version is: v' + str(version) + '\n')
             else:
-                rootLogger.info('Unable to get version details. There is some issue, contact developer')
+                root_logger.info('Unable to get version details. There is some issue, contact developer')
                 exit()
     else:
         #Validate the version number entered using -version
@@ -667,24 +663,24 @@ if args.addBehavior:
         if versionResponse.status_code == 200:
             latestversion = versionResponse.json()['versions']['items'][0]['propertyVersion']
             if int(version) > int(latestversion):
-                rootLogger.info('Please check the version number. The highest/latest version is: ' + str(latestversion) + '\n')
+                root_logger.info('Please check the version number. The highest/latest version is: ' + str(latestversion) + '\n')
                 exit()
             else:
-                rootLogger.info('Entered version is valid.\n')
+                root_logger.info('Entered version is valid.\n')
         else:
-            rootLogger.info('Unable to get version details. There is some issue, contact developer')
+            root_logger.info('Unable to get version details. There is some issue, contact developer')
             exit()
 
     #Let us now move towards rules
     #All rules are saved in samplerules folder, filename is configurable
-    rootLogger.info('Fetching existing property rules...')
+    root_logger.info('Fetching existing property rules...')
     propertyContent = papiObject.getPropertyRulesfromPropertyId(session, propertyDetails['propertyId'], version, propertyDetails['contractId'], propertyDetails['groupId'])
     if propertyContent.status_code == 200:
         completePropertyJson = propertyContent.json()
         with open(os.path.join(args.fromFile),'r') as rulesFileHandler:
             behavior = json.loads(rulesFileHandler.read())
 
-        rootLogger.info('\nFound rule file: ' + args.fromFile)
+        root_logger.info('\nFound rule file: ' + args.fromFile)
 
         updatedCompleteRuleSet = helper.addBehaviorToRule([completePropertyJson['rules']], behavior, args.ruleName)
 
@@ -695,209 +691,238 @@ if args.addBehavior:
 
         if args.checkoutNewVersion.upper() == 'YES':
             #Let us now create a version
-            rootLogger.info('Trying to create a new version of this property based on version ' + str(version))
+            root_logger.info('Trying to create a new version of this property based on version ' + str(version))
             versionResponse = papiObject.createVersion(session, baseVersion=version, property_name=args.property)
             if versionResponse.status_code == 201:
                 #Extract the version number
                 matchPattern = re.compile('/papi/v0/properties/prp_.*/versions/(.*)(\?.*)')
                 newVersion = matchPattern.match(versionResponse.json()['versionLink']).group(1)
-                rootLogger.info('Successfully created new property version: v' + str(newVersion))
+                root_logger.info('Successfully created new property version: v' + str(newVersion))
                 #Make a call to update the rules
-                rootLogger.info('\nNow trying to upload the new ruleset...')
+                root_logger.info('\nNow trying to upload the new ruleset...')
                 uploadRulesResponse = papiObject.uploadRules(session=session, updatedData=json.loads(json.dumps(completePropertyJson)),\
                  property_name=args.property, version=newVersion, propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
                 if uploadRulesResponse.status_code == 200:
-                    rootLogger.info('\nSuccess! \n')
+                    root_logger.info('\nSuccess! \n')
                 else:
-                    rootLogger.info('Unable to update rules in property. Reason is: \n\n' + json.dumps(uploadRulesResponse.json(), indent=4))
+                    root_logger.info('Unable to update rules in property. Reason is: \n\n' + json.dumps(uploadRulesResponse.json(), indent=4))
                     exit()
             else:
-                rootLogger.info('Unable to create a new version.')
+                root_logger.info('Unable to create a new version.')
                 exit()
         else:
             #No Need to create a new version
             #Make a call to update the rules
-            rootLogger.info('\nNow trying to upload the new ruleset to version : ' + str(version))
+            root_logger.info('\nNow trying to upload the new ruleset to version : ' + str(version))
             uploadRulesResponse = papiObject.uploadRules(session=session, updatedData=json.loads(json.dumps(completePropertyJson)),\
              property_name=args.property, version=version, propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
             if uploadRulesResponse.status_code == 200:
-                rootLogger.info('\nSuccess! \n')
+                root_logger.info('\nSuccess! \n')
             else:
-                rootLogger.info('Unable to update rules in property. Reason is: \n\n' + json.dumps(uploadRulesResponse.json(), indent=4))
+                root_logger.info('Unable to update rules in property. Reason is: \n\n' + json.dumps(uploadRulesResponse.json(), indent=4))
                 exit()
     else:
-        rootLogger.info('Unable to fetch property rules.')
+        root_logger.info('Unable to fetch property rules.')
         print(json.dumps(propertyContent.json(), indent=4))
-        exit()
+        exit()    
 
-if args.updateBehavior:
-    papiObject = PapiWrapper(access_hostname)
-    if not args.property:
-        rootLogger.info('\nPlease enter property name using -property.')
-        exit()
-    if not args.version:
-        rootLogger.info('\nPlease enter the version using -version.')
-        exit()
+def deleteBehavior(args):
+    access_hostname, session = init_config(args.edgerc, args.section)
+    papiObject = PapiWrapper(access_hostname, args.account_key)
 
     #Find the property details (IDs)
-    propertyDetails = helper.getPropertyDetailsFromLocalStore(args.property)
-    #Check if it not an empty response
-    if propertyDetails:
-        rootLogger.info('Found Property Details: ')
-        rootLogger.info('contractId: ' + propertyDetails['contractId'])
-        rootLogger.info('groupId: ' + propertyDetails['groupId'] )
-        rootLogger.info('propertyId: ' + propertyDetails['propertyId']+ '\n')
-        pass
+    propertyResponse = papiObject.searchProperty(session,propertyName=args.property)
+    if propertyResponse.status_code == 200:
+        try:
+            propertyDetails = propertyResponse.json()['versions']['items'][0]
+        except:
+            root_logger.info('Property details were not found. Double check property name\n')
+            exit()                
     else:
-        rootLogger.info('Property details were not found. Try running setup again, or double check property name\n')
-        exit()
+       root_logger.info('Property details were not found. Double check property name\n') 
 
-    filename = 'activate.txt'
     #Make a call to update the rules
     versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn='LATEST', propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
     #print(json.dumps(versionResponse.json(), indent=4))
     latestversion = versionResponse.json()['versions']['items'][0]['propertyVersion']
-    with open(filename,'a') as fileHandler:
-        fileHandler.write('akamai property activate ' + args.property + ' --version ' + str(latestversion) + ' --network BOTH --email vbhat@akamai.com\n')
-
 
     #Fetch the latest version if need be
-    rootLogger.info('Fetching version ' + args.version + ' ...')
+    root_logger.info('Fetching version ' + args.version + ' ...')
     if args.version.upper() == 'latest'.upper():
         versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn=args.version.upper(), propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
         version = versionResponse.json()['versions']['items'][0]['propertyVersion']
-        rootLogger.info('Latest version is: v' + str(version) + '\n')
+        root_logger.info('Latest version is: v' + str(version) + '\n')
     else:
         version = args.version
         #Validate the version number entered using -version
         versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn='LATEST', propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
         latestversion = versionResponse.json()['versions']['items'][0]['propertyVersion']
         if int(args.version) > int(latestversion):
-            rootLogger.info('Please check the version number. The highest/latest version is: ' + str(latestversion) + '\n')
+            root_logger.info('Please check the version number. The highest/latest version is: ' + str(latestversion) + '\n')
             exit()
         else:
-            rootLogger.info('Found version...\n')
+            root_logger.info('Found version...\n')
 
-    rootLogger.info('Fetching property rules...\n')
+    root_logger.info('Fetching property rules...\n')
     propertyContent = papiObject.getPropertyRulesfromPropertyId(session, propertyDetails['propertyId'], version, propertyDetails['contractId'], propertyDetails['groupId'])
-    #print(json.dumps(propertyContent.json(), indent=4))
+    
     behavior = {}
-    behavior['options'] = {}
-    behavior['name'] = 'origin'
-    behavior['options']['trueClientIpClientSetting'] = False
-    behavior['options']['trueClientIpHeader'] = 'True-Client-IP'
-    behavior['options']['enableTrueClientIp'] = True
-    behavior['options']['verificationMode'] = 'CUSTOM'
-    behavior['options']['originCertsToHonor'] = 'STANDARD_CERTIFICATE_AUTHORITIES'
-    behavior['options']['cacheKeyHostname'] = 'REQUEST_HOST_HEADER'
-
-    filename = 'activate.txt'
-    if propertyContent.status_code == 200:
-        rules = helper.getChildRulesandUpdate([propertyContent.json()['rules']], behavior)
-        #print(json.dumps(rules[0], indent=4))
-
-        #Let us now create a version
-        rootLogger.info('Trying to create a new version of this property based on version ' + str(version))
-        versionResponse = papiObject.createVersion(session, baseVersion=version, property_name=args.property)
-        if versionResponse.status_code == 201:
-            #Extract the version number
-            matchPattern = re.compile('/papi/v0/properties/prp_.*/versions/(.*)(\?.*)')
-            newVersion = matchPattern.match(versionResponse.json()['versionLink']).group(1)
-            rootLogger.info('Successfully created new property version: v' + str(newVersion))
-            with open(filename,'a') as fileHandler:
-                fileHandler.write('akamai property activate ' + args.property + ' --version ' + str(newVersion) + ' --network BOTH --email vbhat@akamai.com\n')
-            #Make a call to update the rules
-            rootLogger.info('\nNow trying to upload the new ruleset...')
-            ruleData = {}
-            ruleData['rules'] = rules[0]
-            ruleData['comments'] = 'Created from v' + str(version) + '. Update CacheKey'
-            uploadRulesResponse = papiObject.uploadRules(session=session, updatedData=json.loads(json.dumps(ruleData)),\
-             property_name=args.property, version=newVersion, propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
-            if uploadRulesResponse.status_code == 200:
-                rootLogger.info('\nSuccess!n')
-            else:
-                rootLogger.info('Unable to update rules in property. Reason is: \n\n' + json.dumps(uploadRulesResponse.json(), indent=4))
-                exit()
-
-if args.deleteBehavior:
-    papiObject = PapiWrapper(access_hostname)
-    if not args.property:
-        rootLogger.info('\nPlease enter property name using -property.')
-        exit()
-    if not args.version:
-        rootLogger.info('\nPlease enter the version using -version.')
-        exit()
-
-    #Find the property details (IDs)
-    propertyDetails = helper.getPropertyDetailsFromLocalStore(args.property)
-    #Check if it not an empty response
-    if propertyDetails:
-        rootLogger.info('Found Property Details: ')
-        rootLogger.info('contractId: ' + propertyDetails['contractId'])
-        rootLogger.info('groupId: ' + propertyDetails['groupId'] )
-        rootLogger.info('propertyId: ' + propertyDetails['propertyId']+ '\n')
-        pass
-    else:
-        rootLogger.info('Property details were not found. Try running setup again, or double check property name\n')
-        exit()
-
-    filename = 'activate.txt'
-    #Make a call to update the rules
-    versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn='LATEST', propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
-    #print(json.dumps(versionResponse.json(), indent=4))
-    latestversion = versionResponse.json()['versions']['items'][0]['propertyVersion']
-    with open(filename,'a') as fileHandler:
-        fileHandler.write('akamai property activate ' + args.property + ' --version ' + str(latestversion) + ' --network BOTH --email vbhat@akamai.com\n')
+    behavior['name'] = args.behaviorName
 
 
-    #Fetch the latest version if need be
-    rootLogger.info('Fetching version ' + args.version + ' ...')
-    if args.version.upper() == 'latest'.upper():
-        versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn=args.version.upper(), propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
-        version = versionResponse.json()['versions']['items'][0]['propertyVersion']
-        rootLogger.info('Latest version is: v' + str(version) + '\n')
-    else:
-        version = args.version
-        #Validate the version number entered using -version
-        versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn='LATEST', propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
-        latestversion = versionResponse.json()['versions']['items'][0]['propertyVersion']
-        if int(args.version) > int(latestversion):
-            rootLogger.info('Please check the version number. The highest/latest version is: ' + str(latestversion) + '\n')
-            exit()
-        else:
-            rootLogger.info('Found version...\n')
-
-    rootLogger.info('Fetching property rules...\n')
-    propertyContent = papiObject.getPropertyRulesfromPropertyId(session, propertyDetails['propertyId'], version, propertyDetails['contractId'], propertyDetails['groupId'])
-    #print(json.dumps(propertyContent.json(), indent=4))
-    behavior = {}
-    behavior['name'] = 'origin'
-
-
-    filename = 'activate.txt'
     if propertyContent.status_code == 200:
         rules = helper.deleteBehavior([propertyContent.json()['rules']], behavior)
-        #print(json.dumps(rules[0], indent=4))
 
         #Let us now create a version
-        rootLogger.info('Trying to create a new version of this property based on version ' + str(version))
+        root_logger.info('Trying to create a new version of this property based on version ' + str(version))
         versionResponse = papiObject.createVersion(session, baseVersion=version, property_name=args.property)
         if versionResponse.status_code == 201:
             #Extract the version number
             matchPattern = re.compile('/papi/v0/properties/prp_.*/versions/(.*)(\?.*)')
             newVersion = matchPattern.match(versionResponse.json()['versionLink']).group(1)
-            rootLogger.info('Successfully created new property version: v' + str(newVersion))
-            with open(filename,'a') as fileHandler:
-                fileHandler.write('akamai property activate ' + args.property + ' --version ' + str(newVersion) + ' --network BOTH --email vbhat@akamai.com\n')
+            root_logger.info('Successfully created new property version: v' + str(newVersion))
+
             #Make a call to update the rules
-            rootLogger.info('\nNow trying to upload the new ruleset...')
+            root_logger.info('\nNow trying to upload the new ruleset...')
             ruleData = {}
             ruleData['rules'] = rules[0]
-            ruleData['comments'] = 'Created from v' + str(version) + '. Update CacheKey'
+            ruleData['comments'] = 'Created from v' + str(version) + '. Removing ' + args.behaviorName
             uploadRulesResponse = papiObject.uploadRules(session=session, updatedData=json.loads(json.dumps(ruleData)),\
              property_name=args.property, version=newVersion, propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
             if uploadRulesResponse.status_code == 200:
-                rootLogger.info('\nSuccess!n')
+                root_logger.info('\nSuccess!n')
             else:
-                rootLogger.info('Unable to update rules in property. Reason is: \n\n' + json.dumps(uploadRulesResponse.json(), indent=4))
+                root_logger.info('Unable to update rules in property. Reason is: \n\n' + json.dumps(uploadRulesResponse.json(), indent=4))
                 exit()
+
+def deleteRule(args):
+    access_hostname, session = init_config(args.edgerc, args.section)
+    papiObject = PapiWrapper(access_hostname, args.account_key)
+
+    if not args.property:
+        root_logger.info('\nPlease enter property name using -property.')
+        exit()
+    if not args.version:
+        root_logger.info('\nPlease enter the version to use/create from using -version.')
+        exit()
+    if not args.comment:
+        root_logger.info('\nPlease enter the comment/version notes using -comment.')
+        exit()
+    if not args.ruleName:
+        root_logger.info('\nPlease enter the rule name where behavior needs to be added.\n')
+        exit()
+    if not args.checkoutNewVersion:
+        root_logger.info('\nPlease enter whether to create a new version or use existing version using -checkoutNewVersion YES/NO.\n')
+        exit()
+
+    version = args.version
+    
+    #Find the property details (IDs)
+    propertyResponse = papiObject.searchProperty(session,propertyName=args.property)
+    if propertyResponse.status_code == 200:
+        try:
+            propertyDetails = propertyResponse.json()['versions']['items'][0]
+        except:
+            root_logger.info('Property details were not found. Double check property name\n')
+            exit()                
+    else:
+       root_logger.info('Property details were not found. Double check property name\n') 
+
+
+    if args.checkoutNewVersion.upper() == 'YES':
+        #Checkout a version based on version number or production or staging or latest version or version number
+        if args.version.upper() == 'PRODUCTION' or args.version.upper() == 'STAGING' \
+        or args.version.upper() == 'LATEST':
+            root_logger.info('Fetching and verifying ' + version + ' version...')
+            versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn=version.upper(), propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
+            if versionResponse.status_code == 200:
+                version = versionResponse.json()['versions']['items'][0]['propertyVersion']
+                root_logger.info(args.version + ' version is: v' + str(version) + '\n')
+            else:
+                root_logger.info('Unable to get version details. There is some issue, contact developer')
+                exit()
+    else:
+        #Validate the version number entered using -version
+        versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn='LATEST', propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
+        if versionResponse.status_code == 200:
+            latestversion = versionResponse.json()['versions']['items'][0]['propertyVersion']
+            if int(version) > int(latestversion):
+                root_logger.info('Please check the version number. The highest/latest version is: ' + str(latestversion) + '\n')
+                exit()
+            else:
+                root_logger.info('Entered version is valid.\n')
+        else:
+            root_logger.info('Unable to get version details. There is some issue, contact developer')
+            exit()
+
+    #Let us now move towards rules
+    #All rules are saved in samplerules folder, filename is configurable
+    root_logger.info('Fetching existing property rules...')
+    propertyContent = papiObject.getPropertyRulesfromPropertyId(session, propertyDetails['propertyId'], version, propertyDetails['contractId'], propertyDetails['groupId'])
+    if propertyContent.status_code == 200:
+        completePropertyJson = propertyContent.json()
+
+        root_logger.info('Trying to delete the rule: ' + str(args.ruleName))
+        updatedCompleteRuleSet = helper.deleteRules([completePropertyJson['rules']], args.ruleName)
+
+        completePropertyJson['rules'] = updatedCompleteRuleSet[0]
+        #Updating the property comments
+        finalComment = completePropertyJson['comments'] = args.comment
+
+        if args.checkoutNewVersion.upper() == 'YES':
+            #Let us now create a version
+            root_logger.info('Trying to create a new version of this property based on version ' + str(version))
+            versionResponse = papiObject.createVersion(session, baseVersion=version, property_name=args.property)
+            if versionResponse.status_code == 201:
+                #Extract the version number
+                matchPattern = re.compile('/papi/v0/properties/prp_.*/versions/(.*)(\?.*)')
+                newVersion = matchPattern.match(versionResponse.json()['versionLink']).group(1)
+                root_logger.info('Successfully created new property version: v' + str(newVersion))
+                #Make a call to update the rules
+                root_logger.info('\nNow trying to upload the new ruleset...')
+                uploadRulesResponse = papiObject.uploadRules(session=session, updatedData=json.loads(json.dumps(completePropertyJson)),\
+                 property_name=args.property, version=newVersion, propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
+                if uploadRulesResponse.status_code == 200:
+                    root_logger.info('\nSuccess! \n')
+                else:
+                    root_logger.info('Unable to update rules in property. Reason is: \n\n' + json.dumps(uploadRulesResponse.json(), indent=4))
+                    exit()
+            else:
+                root_logger.info('Unable to create a new version.')
+                exit()
+        else:
+            #No Need to create a new version
+            #Make a call to update the rules
+            root_logger.info('\nNow trying to upload the new ruleset to version : ' + str(version))
+            uploadRulesResponse = papiObject.uploadRules(session=session, updatedData=json.loads(json.dumps(completePropertyJson)),\
+             property_name=args.property, version=version, propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
+            if uploadRulesResponse.status_code == 200:
+                root_logger.info('\nSuccess! \n')
+            else:
+                root_logger.info('Unable to update rules in property. Reason is: \n\n' + json.dumps(uploadRulesResponse.json(), indent=4))
+                exit()
+    else:
+        root_logger.info('Unable to fetch property rules.')
+        print(json.dumps(propertyContent.json(), indent=4))
+        exit()    
+
+def get_prog_name():
+    prog = os.path.basename(sys.argv[0])
+    if os.getenv("AKAMAI_CLI"):
+        prog = "akamai ruleupdater"
+    return prog
+
+
+def get_cache_dir():
+    if os.getenv("AKAMAI_CLI_CACHE_DIR"):
+        return os.getenv("AKAMAI_CLI_CACHE_DIR")
+
+    return os.curdir
+
+# Final or common Successful exit
+if __name__ == '__main__':
+    try:
+        status = cli()
+        exit(status)
+    except KeyboardInterrupt:
+        exit(1) 
