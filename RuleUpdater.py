@@ -1,5 +1,5 @@
 """
-Copyright 2017 Akamai Technologies, Inc. All Rights Reserved.
+Copyright 2021 Akamai Technologies, Inc. All Rights Reserved.
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -289,7 +289,7 @@ def downloadRule(args):
        root_logger.info('Property details were not found. Double check property name\n')
 
     #Fetch the latest version if need be
-    if args.version.upper() == 'latest'.upper():
+    if args.version.upper() == 'latest'.upper() or args.version.upper() == 'production'.upper() or args.version.upper() == 'staging'.upper():
         root_logger.info('Fetching latest version.')
         versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn=args.version.upper(), propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
         if versionResponse.status_code == 200:
@@ -298,7 +298,7 @@ def downloadRule(args):
         else:
             root_logger.info('Unable to find the version details\n')
             root_logger.info(json.dumps(versionResponse.json(), indent=4))    
-            exit()
+            exit()          
     else:
         version = args.version
         #Validate the version number entered using -version
@@ -398,7 +398,7 @@ def addRule(args):
 
     #Fetch the latest version if need be
     root_logger.info('Fetching version ' + version + ' ...')
-    if version.upper() == 'latest'.upper():
+    if version.upper() == 'latest'.upper() or version.upper() == 'production'.upper() or version.upper() == 'staging'.upper():
         versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn=version.upper(), propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
         version = versionResponse.json()['versions']['items'][0]['propertyVersion']
         root_logger.info('Latest version is: v' + str(version) + '\n')
@@ -430,10 +430,10 @@ def addRule(args):
         if args.addVariables and args.variableFile:
             with open(args.variableFile,'r') as variablesFileHandler:
                 newVariables = json.loads(variablesFileHandler.read())            
-            newVariablesList = helper.addVariables(completePropertyJson['rules']['variables'], newVariables)
-        
-        #Replace the variables 
-        completePropertyJson['rules']['variables'] = newVariablesList
+            newVariablesList = helper.addVariables(completePropertyJson['rules']['variables'], newVariables)        
+            #Replace the variables 
+            completePropertyJson['rules']['variables'] = newVariablesList
+
         updatedCompleteRuleSet = helper.insertRule([completePropertyJson['rules']], newRuleSet, args.ruleName, whereTo)
         #root_logger.info(json.dumps(updatedCompleteRuleSet))
         #Check if we found the matching rule
