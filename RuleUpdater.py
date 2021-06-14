@@ -290,7 +290,7 @@ def downloadRule(args):
 
     #Fetch the latest version if need be
     if args.version.upper() == 'latest'.upper() or args.version.upper() == 'production'.upper() or args.version.upper() == 'staging'.upper():
-        root_logger.info('Fetching latest version.')
+        root_logger.info('Fetching ' + args.version.upper() +' version.')
         versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn=args.version.upper(), propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
         if versionResponse.status_code == 200:
             version = versionResponse.json()['versions']['items'][0]['propertyVersion']
