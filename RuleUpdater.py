@@ -345,6 +345,7 @@ def downloadRule(args):
         exit()
 
 def addRule(args):
+    root_logger.info('Processing: ' + args.property)
     access_hostname, session = init_config(args.edgerc, args.section)
     papiObject = PapiWrapper(access_hostname, args.account_key)
 
