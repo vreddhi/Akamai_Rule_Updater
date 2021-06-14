@@ -1,8 +1,0 @@
-2021-06-14 11:01:46,877 - root - INFO - Fetching latest version.
-2021-06-14 11:01:49,523 - root - INFO - Latest version is: v142
-
-2021-06-14 11:01:49,524 - root - INFO - Fetching property rules...
-2021-06-14 11:01:49,524 - root - INFO - Searching for Rule: Caching
-
-2021-06-14 11:01:53,433 - root - INFO - Found rule...
-2021-06-14 11:01:53,434 - root - INFO - Rule file is saved in: samplerules/www.vbhat.com_v142_Caching.json
