@@ -134,11 +134,11 @@ def cli():
          {"name": "insertBefore", "help": "This inserts rule before the rulename specified using -ruleName"},
          {"name": "insertLast", "help": "This inserts rule at the end of configuration"},
          {"name": "addVariables", "help": "This declares new variables in the configuration"},
-         {"name": "variableFile", "help": "File containing variable definition. It should be a JSON file with name/value/descripton map"}],
+         {"name": "variableFile", "help": "File containing variable definition. It should be a JSON file with name/value/descripton map"},
+         {"name": "ruleName", "help": "Rule Name to find"}],
         [{"name": "property", "help": "Property name"},
          {"name": "fromVersion", "help": "Base version number from which the relevant operation is performed"},
          {"name": "fromFile", "help": "Filename to be used to read from the rule template under samplerules folder"},
-         {"name": "ruleName", "help": "Rule Name to find"},
          {"name": "comment", "help": "Version notes to be saved"}])
 
     actions["replaceRule"] = create_sub_command(
@@ -418,7 +418,7 @@ def addRule(args):
     propertyContent = papiObject.getPropertyRulesfromPropertyId(session, propertyDetails['propertyId'], version, propertyDetails['contractId'], propertyDetails['groupId'])
     if propertyContent.status_code == 200:
         completePropertyJson = propertyContent.json()
-        with open(os.path.join('samplerules',args.fromFile),'r') as rulesFileHandler:
+        with open(os.path.join(args.fromFile),'r') as rulesFileHandler:
             newRuleSet = json.loads(rulesFileHandler.read())
 
         root_logger.info('\nFound rule file: ' + args.fromFile)
