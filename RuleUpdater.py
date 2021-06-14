@@ -749,7 +749,8 @@ def deleteBehavior(args):
 
     #Fetch the latest version if need be
     root_logger.info('Fetching version ' + args.version + ' ...')
-    if args.version.upper() == 'latest'.upper():
+    if args.version.upper() == 'PRODUCTION' or args.version.upper() == 'STAGING' \
+    or args.version.upper() == 'LATEST':
         versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn=args.version.upper(), propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
         version = versionResponse.json()['versions']['items'][0]['propertyVersion']
         root_logger.info('Latest version is: v' + str(version) + '\n')
