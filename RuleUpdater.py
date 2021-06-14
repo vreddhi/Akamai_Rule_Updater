@@ -350,7 +350,7 @@ def addRule(args):
 
     #Check for existence of file
     try:
-        with open(os.path.join('samplerules',args.fromFile),'r') as rulesFileHandler:
+        with open(os.path.join(args.fromFile),'r') as rulesFileHandler:
             pass
     except FileNotFoundError:
         root_logger.info('\nEntered filename does not exist. Ensure file is present in samplerules directory.')
