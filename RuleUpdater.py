@@ -143,7 +143,8 @@ def cli():
 
     actions["replaceRule"] = create_sub_command(
         subparsers, "replaceRule", "Replace an existing json rule",
-        [],
+        [{"name": "addVariables", "help": "This declares new variables in the configuration"},
+         {"name": "variableFile", "help": "File containing variable definition. It should be a JSON file with name/value/descripton map"}],
         [{"name": "property", "help": "Property name"},
          {"name": "fromVersion", "help": "Base version number from which the relevant operation is performed"},
          {"name": "fromFile", "help": "Filename to be used to read from the rule template under samplerules folder"},

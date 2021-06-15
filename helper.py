@@ -59,13 +59,23 @@ def deleteBehavior(parentRule,behavior):
     parentRule : Updated Rule tree
     """
     for eachRule in parentRule:
+        index = 0 
         for eachbehavior in eachRule['behaviors']:
+            found = False
             if eachbehavior['name'] == behavior['name']:
-                #Delete the behavior
-                del eachbehavior
+                #Mark for deletion
+                found = True
+                print('Marked for delete')
             else:
                 #The behavior is not being updated, so move on
                 pass
+
+            if found is True:
+                #Delete the behavior
+                del eachRule['behaviors'][index]
+
+            index = index + 1
+
         #Check whether we have child rules, where in again behavior might be found
         if len(eachRule['children']) != 0:
             deleteBehavior(eachRule['children'],behavior)
