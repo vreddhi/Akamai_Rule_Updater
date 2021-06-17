@@ -729,6 +729,8 @@ def addBehavior(args):
         exit()    
 
 def deleteBehavior(args):
+    print('\n*****************************')
+    print('Processing: ' + args.property)
     access_hostname, session = init_config(args.edgerc, args.section)
     papiObject = PapiWrapper(access_hostname, args.account_key)
 
@@ -742,6 +744,7 @@ def deleteBehavior(args):
             exit()                
     else:
        root_logger.info('Property details were not found. Double check property name\n') 
+       exit()
 
     #Make a call to update the rules
     versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn='LATEST', propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
