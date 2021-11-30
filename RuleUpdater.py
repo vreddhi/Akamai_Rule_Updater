@@ -139,7 +139,8 @@ def cli():
         [{"name": "property", "help": "Property name"},
          {"name": "fromVersion", "help": "Base version number from which the relevant operation is performed"},
          {"name": "fromFile", "help": "Filename to be used to read from the rule template under samplerules folder"},
-         {"name": "comment", "help": "Version notes to be saved"}])
+         {"name": "comment", "help": "Version notes to be saved"},
+         {"name": "checkoutNewVersion", "help": "Please enter whether to create a new version or use existing version using -checkoutNewVersion YES/NO."}])
 
     actions["replaceRule"] = create_sub_command(
         subparsers, "replaceRule", "Replace an existing json rule",
@@ -149,7 +150,8 @@ def cli():
          {"name": "fromVersion", "help": "Base version number from which the relevant operation is performed"},
          {"name": "fromFile", "help": "Filename to be used to read from the rule template under samplerules folder"},
          {"name": "ruleName", "help": "Rule Name to find"},
-         {"name": "comment", "help": "Version notes to be saved"}])
+         {"name": "comment", "help": "Version notes to be saved"},
+         {"name": "checkoutNewVersion", "help": "Please enter whether to create a new version or use existing version using -checkoutNewVersion YES/NO."}])
 
     actions["deleteRule"] = create_sub_command(
         subparsers, "deleteRule",
@@ -452,6 +454,32 @@ def addRule(args):
                 else:
                     finalComment = completePropertyJson['comments'] = 'Created from v' + str(version) + ': Added rule ' + newRuleSet['name'] + ' '+ comment + ' ' + args.ruleName + ' rule'
 
+                if args.checkoutNewVersion.upper() == 'YES':
+                        #Checkout a version based on version number or production or staging or latest version or version number
+                        if args.version.upper() == 'PRODUCTION' or args.version.upper() == 'STAGING' \
+                        or args.version.upper() == 'LATEST':
+                            root_logger.info('Fetching and verifying ' + version + ' version...')
+                            versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn=version.upper(), propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
+                            if versionResponse.status_code == 200:
+                                version = versionResponse.json()['versions']['items'][0]['propertyVersion']
+                                root_logger.info(args.version + ' version is: v' + str(version) + '\n')
+                            else:
+                                root_logger.info('Unable to get version details. There is some issue, contact developer')
+                                exit()
+                else:
+                    #Validate the version number entered using -version
+                    versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn='LATEST', propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
+                    if versionResponse.status_code == 200:
+                        latestversion = versionResponse.json()['versions']['items'][0]['propertyVersion']
+                        if int(version) > int(latestversion):
+                            root_logger.info('Please check the version number. The highest/latest version is: ' + str(latestversion) + '\n')
+                            exit()
+                        else:
+                            root_logger.info('Entered version is valid.\n')
+                    else:
+                        root_logger.info('Unable to get version details. There is some issue, contact developer')
+                        exit()
+                            
                 #Let us now create a version
                 root_logger.info('Trying to create a new version of this property based on version ' + str(version))
                 versionResponse = papiObject.createVersion(session, baseVersion=version, property_name=args.property)
