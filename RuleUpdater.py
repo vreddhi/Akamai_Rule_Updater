@@ -137,7 +137,7 @@ def cli():
          {"name": "variableFile", "help": "File containing variable definition. It should be a JSON file with name/value/descripton map"},
          {"name": "ruleName", "help": "Rule Name to find"}],
         [{"name": "property", "help": "Property name"},
-         {"name": "fromVersion", "help": "Base version number from which the relevant operation is performed"},
+         {"name": "version", "help": "version number on OR from which the relevant operation is performed"},
          {"name": "fromFile", "help": "Filename to be used to read from the rule template under samplerules folder"},
          {"name": "comment", "help": "Version notes to be saved"},
          {"name": "checkoutNewVersion", "help": "Please enter whether to create a new version or use existing version using -checkoutNewVersion YES/NO."}])
@@ -387,7 +387,7 @@ def addRule(args):
             root_logger.info('\nPlease enter the rule name to be replaced using -ruleName.\n')
             exit()
 
-    version = args.fromVersion
+    version = args.version
     
     #Find the property details (IDs)
     propertyResponse = papiObject.searchProperty(session,propertyName=args.property)
@@ -401,11 +401,11 @@ def addRule(args):
        root_logger.info('Property details were not found. Double check property name\n') 
 
     #Fetch the latest version if need be
-    root_logger.info('Fetching version ' + version + ' ...')
+    root_logger.info('Fetching version ' + str(version) + ' ...')
     if version.upper() == 'latest'.upper() or version.upper() == 'production'.upper() or version.upper() == 'staging'.upper():
         versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn=version.upper(), propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
         version = versionResponse.json()['versions']['items'][0]['propertyVersion']
-        root_logger.info('Latest version is: v' + str(version) + '\n')
+        root_logger.info('Version is: v' + str(version) + '\n')
     else:
         #Validate the version number entered using -fromVersion
         versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn='LATEST', propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
@@ -454,52 +454,28 @@ def addRule(args):
                 else:
                     finalComment = completePropertyJson['comments'] = 'Created from v' + str(version) + ': Added rule ' + newRuleSet['name'] + ' '+ comment + ' ' + args.ruleName + ' rule'
 
-                if args.checkoutNewVersion.upper() == 'YES':
-                        #Checkout a version based on version number or production or staging or latest version or version number
-                        if args.version.upper() == 'PRODUCTION' or args.version.upper() == 'STAGING' \
-                        or args.version.upper() == 'LATEST':
-                            root_logger.info('Fetching and verifying ' + version + ' version...')
-                            versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn=version.upper(), propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
-                            if versionResponse.status_code == 200:
-                                version = versionResponse.json()['versions']['items'][0]['propertyVersion']
-                                root_logger.info(args.version + ' version is: v' + str(version) + '\n')
-                            else:
-                                root_logger.info('Unable to get version details. There is some issue, contact developer')
-                                exit()
-                else:
-                    #Validate the version number entered using -version
-                    versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn='LATEST', propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
-                    if versionResponse.status_code == 200:
-                        latestversion = versionResponse.json()['versions']['items'][0]['propertyVersion']
-                        if int(version) > int(latestversion):
-                            root_logger.info('Please check the version number. The highest/latest version is: ' + str(latestversion) + '\n')
-                            exit()
-                        else:
-                            root_logger.info('Entered version is valid.\n')
+                if args.checkoutNewVersion.upper() == 'YES':                         
+                    #Let us now create a version
+                    root_logger.info('Trying to create a new version of this property based on version ' + str(version))
+                    versionResponse = papiObject.createVersion(session, baseVersion=version, property_name=args.property, \
+                                        propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
+                    if versionResponse.status_code == 201:
+                        #Extract the version number
+                        matchPattern = re.compile('/papi/v0/properties/prp_.*/versions/(.*)(\?.*)')
+                        version = matchPattern.match(versionResponse.json()['versionLink']).group(1)
+                        root_logger.info('Successfully created new property version: v' + str(version))
                     else:
-                        root_logger.info('Unable to get version details. There is some issue, contact developer')
+                        root_logger.info('Unable to create a new version.')
                         exit()
-                            
-                #Let us now create a version
-                root_logger.info('Trying to create a new version of this property based on version ' + str(version))
-                versionResponse = papiObject.createVersion(session, baseVersion=version, property_name=args.property)
-                if versionResponse.status_code == 201:
-                    #Extract the version number
-                    matchPattern = re.compile('/papi/v0/properties/prp_.*/versions/(.*)(\?.*)')
-                    newVersion = matchPattern.match(versionResponse.json()['versionLink']).group(1)
-                    root_logger.info('Successfully created new property version: v' + str(newVersion))
                     #Make a call to update the rules
                     root_logger.info('\nNow trying to upload the new ruleset...')
                     uploadRulesResponse = papiObject.uploadRules(session=session, updatedData=json.loads(json.dumps(completePropertyJson)),\
-                     property_name=args.property, version=newVersion, propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
+                    property_name=args.property, version=version, propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
                     if uploadRulesResponse.status_code == 200:
                         root_logger.info('\nSuccess! Comments: "' + finalComment + '"\n')
                     else:
                         root_logger.info('Unable to update rules in property. Reason is: \n\n' + json.dumps(uploadRulesResponse.json(), indent=4))
-                        exit()
-                else:
-                    root_logger.info('Unable to create a new version.')
-                    exit()
+                        exit()                        
             else:
                 root_logger.info('\nError: Found ' + str(updatedCompleteRuleSet['occurances']) + ' occurrences of the rule: "' + args.ruleName + '"' + '. Please check configuration. Exiting...')
         else:
@@ -687,7 +663,7 @@ def addBehavior(args):
             else:
                 root_logger.info('Unable to get version details. There is some issue, contact developer')
                 exit()
-    else:
+    elif isinstance(version, int):
         #Validate the version number entered using -version
         versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn='LATEST', propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
         if versionResponse.status_code == 200:
@@ -701,19 +677,28 @@ def addBehavior(args):
             root_logger.info('Unable to get version details. There is some issue, contact developer')
             exit()
 
+
+    #Update the version number based on input 
+    if args.version.upper() == 'LATEST':
+        versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn='LATEST', propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
+        if versionResponse.status_code == 200:
+            version = versionResponse.json()['versions']['items'][0]['propertyVersion']
+
     #Let us now move towards rules
     #All rules are saved in samplerules folder, filename is configurable
     root_logger.info('Fetching existing property rules...')
     propertyContent = papiObject.getPropertyRulesfromPropertyId(session, propertyDetails['propertyId'], version, propertyDetails['contractId'], propertyDetails['groupId'])
     if propertyContent.status_code == 200:
         completePropertyJson = propertyContent.json()
+        #print(json.dumps(completePropertyJson, indent=4))
         with open(os.path.join(args.fromFile),'r') as rulesFileHandler:
             behavior = json.loads(rulesFileHandler.read())
 
-        root_logger.info('\nFound rule file: ' + args.fromFile)
+        root_logger.info('\nFound file: ' + args.fromFile)
 
         updatedCompleteRuleSet = helper.addBehaviorToRule([completePropertyJson['rules']], behavior, args.ruleName)
 
+        #print(json.dumps(updatedCompleteRuleSet, indent=4))
         completePropertyJson['rules'] = updatedCompleteRuleSet[0]
 
         #Updating the property comments
@@ -722,7 +707,8 @@ def addBehavior(args):
         if args.checkoutNewVersion.upper() == 'YES':
             #Let us now create a version
             root_logger.info('Trying to create a new version of this property based on version ' + str(version))
-            versionResponse = papiObject.createVersion(session, baseVersion=version, property_name=args.property)
+            versionResponse = papiObject.createVersion(session, baseVersion=version, property_name=args.property, \
+                    propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
             if versionResponse.status_code == 201:
                 #Extract the version number
                 matchPattern = re.compile('/papi/v0/properties/prp_.*/versions/(.*)(\?.*)')

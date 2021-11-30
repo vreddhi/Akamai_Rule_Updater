@@ -40,7 +40,7 @@ def addBehaviorToRule(parentRule,behavior,ruleName):
             return parentRule    
 
     #Awesome, we are done updating behaviors, lets go back
-    #return parentRule
+    return parentRule
 
 def deleteBehavior(parentRule,behavior):
     """

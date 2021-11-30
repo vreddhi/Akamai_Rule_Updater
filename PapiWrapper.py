@@ -254,7 +254,7 @@ class PapiWrapper(object):
             self.final_response = rulesResponse.json()['detail']
         return rulesResponse
 
-    def createVersion(self,session,baseVersion,property_name):
+    def createVersion(self,session,baseVersion,property_name, propertyId, contractId, groupId):
         """
         Function to create or checkout a version of property
 
@@ -273,15 +273,14 @@ class PapiWrapper(object):
             (createVersionResponse) Object with all response details.
         """
 
-        self.getPropertyInfo(session, property_name)
         newVersionData = """
         {
             "createFromVersion": %s
         }
         """ % (baseVersion)
-        createVersionUrl = 'https://' + self.access_hostname + '/papi/v0/properties/' + self.propertyId + '/versions/?contractId=' + self.contractId + '&groupId=' + self.groupId
+        createVersionUrl = 'https://' + self.access_hostname + '/papi/v0/properties/' + propertyId + '/versions/?contractId=' + contractId + '&groupId=' + groupId
         createVersionUrl = self.formUrl(createVersionUrl)
-
+        
         createVersionResponse = session.post(createVersionUrl, data=newVersionData,headers=self.headers)
         if createVersionResponse.status_code == 201:
             self.final_response = "SUCCESS"
