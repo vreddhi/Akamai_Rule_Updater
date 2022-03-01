@@ -121,12 +121,12 @@ def cli():
 
     actions["downloadRule"] = create_sub_command(
         subparsers,
-        "downloadRule",
+        "download-rule",
         "Download a specific rule in a configuration into json format",
-        [{"name": "outputFilename", "help": "Filename to be used to save the rule in json format under samplerules folder"}],
+        [{"name": "filename", "help": "Filename to be used to save the rule in json format under samplerules folder"}],
         [{"name": "property", "help": "Property name"},
-         {"name": "version", "help": "version number or the text 'LATEST/PRODUCTION/STAGING' which will fetch the latest version"},
-         {"name": "ruleName", "help": "Rule Name to find"}])
+         {"name": "version", "help": "version number or the text 'LATEST/PRODUCTION/STAGING' "},
+         {"name": "rule-name", "help": "Rule Name to find"}])
 
     actions["addRule"] = create_sub_command(
         subparsers, "addRule", "Add a raw json rule to an existing configuration (before or after and existing rule)",
@@ -294,7 +294,7 @@ def downloadRule(args):
     #Fetch the latest version if need be
     if args.version.upper() == 'latest'.upper() or args.version.upper() == 'production'.upper() or args.version.upper() == 'staging'.upper():
         root_logger.info('Fetching ' + args.version.upper() +' version.')
-        versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn=args.version.upper(), propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
+        versionResponse = papiObject.getVersion(session, activeOn=args.version.upper(), propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
         if versionResponse.status_code == 200:
             version = versionResponse.json()['versions']['items'][0]['propertyVersion']
             root_logger.info('Latest version is: v' + str(version) + '\n')
@@ -306,7 +306,7 @@ def downloadRule(args):
         version = args.version
         #Validate the version number entered using -version
         root_logger.info('Fetching version ' + args.version + ' ...')
-        versionResponse = papiObject.getVersion(session, property_name=args.property, activeOn='LATEST', propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
+        versionResponse = papiObject.getVersion(session, activeOn='LATEST', propertyId=propertyDetails['propertyId'], contractId=propertyDetails['contractId'], groupId=propertyDetails['groupId'])
         latestversion = versionResponse.json()['versions']['items'][0]['propertyVersion']
         if int(args.version) > int(latestversion):
             root_logger.info('Please check the version number. The latest version is: ' + str(latestversion) + '\n')

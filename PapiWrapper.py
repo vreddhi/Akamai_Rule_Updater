@@ -13,36 +13,13 @@ __all__=['PapWrapper']
 class PapiWrapper(object):
     """All basic operations that can be performed using PAPI """
 
-    final_response = "NULL" #This variable holds the SUCCESS or FAILURE reason
     headers = {
         "Content-Type": "application/json"
     }
 
-    access_hostname = "mandatory"
-    property_name = "optional"
-    version = "optional"
-    notes = "optional"
-    emails = "optional"
-    groupId = "optional"
-    contractId = "optional"
-    propertyId = "optional"
-
-    def __init__(self, access_hostname, account_switch_key, property_name = "optional", \
-                version = "optional",notes = "optional", emails = "optional", \
-                groupId = "optional", contractId = "optional", propertyId = "optional"):
+    def __init__(self, access_hostname, account_switch_key):
         self.access_hostname = access_hostname
-        self.property_name = property_name
-        self.version = version
-        self.notes = notes
-        self.emails = emails
-        self.groupId = groupId
-        self.contractId = contractId
-        self.propertyId = propertyId
-        if account_switch_key != '':
-            self.account_switch_key = '&accountSwitchKey=' + account_switch_key
-        else:
-            self.account_switch_key = ''        
-
+       
     def getContracts(self,session):
         """
         Function to fetch all contracts
@@ -62,51 +39,6 @@ class PapiWrapper(object):
 
         contractsResponse = session.get(contractsUrl)
         return contractsResponse
-
-    def getPropertyInfo(self,session,property_name):
-        """
-        Function to fetch property ID and update the proerty object with corresponding values
-
-        Parameters
-        ----------
-        session : <string>
-            An EdgeGrid Auth akamai session object
-        property_name: <string>
-            Property or configuration name
-
-        Returns
-        -------
-        self : self
-            (PapiWrapper) Object with propertyId, contractId and groupId as attributes
-        """
-        groupsInfo = self.getGroups(session)
-        for eachDataGroup in groupsInfo.json()['groups']['items']:
-            try:
-                contractIdList = eachDataGroup['contractIds']
-                for contractId in contractIdList:
-                    groupId = eachDataGroup['groupId']
-                    url = 'https://' + self.access_hostname + '/papi/v0/properties/?contractId=' + contractId +'&groupId=' + groupId
-                    propertiesResponse = session.get(url)
-                    if propertiesResponse.status_code == 200:
-                        propertiesResponseJson = propertiesResponse.json()
-                        propertiesList = propertiesResponseJson['properties']['items']
-                        for propertyInfo in propertiesList:
-                            propertyName = propertyInfo['propertyName']
-                            propertyId = propertyInfo['propertyId']
-                            propertyContractId = propertyInfo['contractId']
-                            propertyGroupId = propertyInfo['groupId']
-                            if propertyName == property_name or propertyName == property_name + ".xml":
-                                #Update the self attributes with correct values
-                                self.groupId = propertyGroupId
-                                self.contractId = propertyContractId
-                                self.propertyId = propertyId
-                                self.final_response = "SUCCESS"
-                                return self
-            except KeyError:
-                pass
-        #Return the self as it is without updated information
-        self.final_response = "FAILURE"
-        return self
 
 
     def getGroups(self,session):
@@ -128,10 +60,6 @@ class PapiWrapper(object):
         groupUrl = self.formUrl(groupUrl)
 
         groupResponse = session.get(groupUrl)
-        if groupResponse.status_code == 200:
-            self.final_response = "SUCCESS"
-        else:
-            self.final_response = "FAILURE"
         return groupResponse
 
     def searchProperty(self,session,propertyName='optional',hostname='optional',edgeHostname='optional'):
@@ -168,11 +96,6 @@ class PapiWrapper(object):
         } """ % (seachTag,searchValue)
 
         searchResponse = session.post(searchUrl, data=searchData,headers=self.headers)
-        if searchResponse.status_code == 200:
-            self.final_response = "SUCCESS"
-        else:
-            self.final_response = "FAILURE"
-
         return searchResponse
 
     def getAllProperties(self,session,contractId,groupId):
@@ -195,37 +118,7 @@ class PapiWrapper(object):
         propertiesResponse = session.get(url)
         return propertiesResponse
 
-    def getPropertyRules(self,session,property_name,version):
-        """
-        Function to download rules from a property
-
-        Parameters
-        ----------
-        session : <string>
-            An EdgeGrid Auth akamai session object
-        property_name: <string>
-            Property or configuration name
-        version : <int>
-            Property orconfiguration version number
-
-        Returns
-        -------
-        rulesResponse : rulesResponse
-            (rulesResponse) Object with all response details.
-        """
-
-        self.getPropertyInfo(session, property_name)
-        rulesUrl = 'https://' + self.access_hostname  + '/papi/v0/properties/' + self.propertyId +'/versions/'+str(version)+'/rules/?contractId='+ self.contractId +'&groupId='+ self.groupId
-        rulesUrl = self.formUrl(rulesUrl)
-
-        rulesResponse = session.get(rulesUrl)
-        if rulesResponse.status_code == 200:
-            self.final_response = "SUCCESS"
-        else:
-            self.final_response = rulesResponse.json()['detail']
-        return rulesResponse
-
-    def getPropertyRulesfromPropertyId(self,session,propertyId,version,contractId,groupId):
+    def getPropertyRules(self,session,propertyId,version, contractId, groupId):
         """
         Function to download rules from a property
 
@@ -248,13 +141,11 @@ class PapiWrapper(object):
         rulesUrl = self.formUrl(rulesUrl)
 
         rulesResponse = session.get(rulesUrl)
-        if rulesResponse.status_code == 200:
-            self.final_response = "SUCCESS"
-        else:
-            self.final_response = rulesResponse.json()['detail']
         return rulesResponse
 
-    def createVersion(self,session,baseVersion,property_name, propertyId, contractId, groupId):
+
+
+    def createVersion(self,session,baseVersion, propertyId, contractId, groupId):
         """
         Function to create or checkout a version of property
 
@@ -282,11 +173,9 @@ class PapiWrapper(object):
         createVersionUrl = self.formUrl(createVersionUrl)
         
         createVersionResponse = session.post(createVersionUrl, data=newVersionData,headers=self.headers)
-        if createVersionResponse.status_code == 201:
-            self.final_response = "SUCCESS"
         return createVersionResponse
 
-    def getVersion(self,session,property_name,activeOn="LATEST",propertyId='optional',contractId='optional',groupId='optional'):
+    def getVersion(self,session,activeOn,propertyId,contractId,groupId):
         """
         Function to get the latest or staging or production version
 
@@ -305,26 +194,19 @@ class PapiWrapper(object):
             (VersionResponse) Object with all response details.
         """
 
-        if propertyId == 'optional' or groupId == 'optional' or contractId == 'optional':
-            self.getPropertyInfo(session, property_name)
-        else:
-            self.propertyId = propertyId
-            self.groupId = groupId
-            self.contractId = contractId
-
         if activeOn == "LATEST":
-            VersionUrl = 'https://' + self.access_hostname + '/papi/v0/properties/' + self.propertyId + '/versions/latest?contractId=' + self.contractId +'&groupId=' + self.groupId
+            VersionUrl = 'https://' + self.access_hostname + '/papi/v0/properties/' + propertyId + '/versions/latest?contractId=' + contractId +'&groupId=' + groupId
         elif activeOn == "STAGING":
-            VersionUrl = 'https://' + self.access_hostname + '/papi/v0/properties/' + self.propertyId + '/versions/latest?contractId=' + self.contractId +'&groupId=' + self.groupId + '&activatedOn=STAGING'
+            VersionUrl = 'https://' + self.access_hostname + '/papi/v0/properties/' + propertyId + '/versions/latest?contractId=' + contractId +'&groupId=' + groupId + '&activatedOn=STAGING'
         elif activeOn == "PRODUCTION":
-            VersionUrl = 'https://' + self.access_hostname + '/papi/v0/properties/' + self.propertyId + '/versions/latest?contractId=' + self.contractId +'&groupId=' + self.groupId + '&activatedOn=PRODUCTION'
+            VersionUrl = 'https://' + self.access_hostname + '/papi/v0/properties/' + propertyId + '/versions/latest?contractId=' + contractId +'&groupId=' + groupId + '&activatedOn=PRODUCTION'
 
         VersionUrl = self.formUrl(VersionUrl)
 
         VersionResponse = session.get(VersionUrl)
         return VersionResponse
 
-    def listVersions(self,session,property_name,propertyId='optional',contractId='optional',groupId='optional'):
+    def listVersions(self,session,propertyId,contractId,groupId):
         """
         Function to list all versions of a property
 
@@ -341,20 +223,13 @@ class PapiWrapper(object):
             (VersionResponse) Object with all response details.
         """
 
-        if propertyId == 'optional' or groupId == 'optional' or contractId == 'optional':
-            self.getPropertyInfo(session, property_name)
-        else:
-            self.propertyId = propertyId
-            self.groupId = groupId
-            self.contractId = contractId
-
-        VersionUrl = 'https://' + self.access_hostname + '/papi/v1/properties/' + self.propertyId + '/versions/?contractId=' + self.contractId +'&groupId=' + self.groupId
+        VersionUrl = 'https://' + self.access_hostname + '/papi/v1/properties/' + propertyId + '/versions/?contractId=' + contractId +'&groupId=' + groupId
         VersionUrl = self.formUrl(VersionUrl)
 
         VersionResponse = session.get(VersionUrl)
         return VersionResponse
 
-    def uploadRules(self,session,updatedData,property_name,version,propertyId='optional',contractId='optional',groupId='optional'):
+    def uploadRules(self,session,updatedData,version,propertyId,contractId,groupId):
         """
         Function to upload rules to a property
 
@@ -372,27 +247,15 @@ class PapiWrapper(object):
         updateResponse : updateResponse
             (updateResponse) Object with all response details.
         """
-        if propertyId == 'optional' or groupId == 'optional' or contractId == 'optional':
-            self.getPropertyInfo(session, property_name)
-        else:
-            self.propertyId = propertyId
-            self.groupId = groupId
-            self.contractId = contractId
 
-        updateurl = 'https://' + self.access_hostname  + '/papi/v0/properties/'+ self.propertyId + "/versions/" + str(version) + '/rules/' + '?contractId=' + self.contractId +'&groupId=' + self.groupId
+        updateurl = 'https://' + self.access_hostname  + '/papi/v0/properties/'+ propertyId + "/versions/" + str(version) + '/rules/' + '?contractId=' + contractId +'&groupId=' + groupId
         updateurl = self.formUrl(updateurl)
 
         updatedData = json.dumps(updatedData)
         updateResponse = session.put(updateurl,data=updatedData,headers=self.headers)
-        if updateResponse.status_code == 403:
-            self.final_response == "FAILURE"
-        elif updateResponse.status_code == 404:
-            self.final_response == "FAILURE"
-        elif updateResponse.status_code == 200:
-            self.final_response == "SUCCESS"
         return updateResponse
 
-    def activateConfiguration(self,session,property_name,version,network,emailList,notes,propertyId='optional',contractId='optional',groupId='optional',ignoreWarnings='optional'):
+    def activateConfiguration(self,session,version,network,emailList,notes,propertyId,contractId,groupId,ignoreWarnings='optional'):
         """
         Function to activate a configuration or property
 
@@ -416,13 +279,6 @@ class PapiWrapper(object):
         activationResponse : activationResponse
             (activationResponse) Object with all response details.
         """
-        if propertyId == 'optional' or contractId == 'optional' or groupId == 'optional':
-            self.getPropertyInfo(session, property_name)
-        else:
-            self.propertyId = propertyId
-            self.groupId = groupId
-            self.contractId = contractId
-
         emails = json.dumps(emailList)
         activationDetails = """
              {
@@ -433,9 +289,9 @@ class PapiWrapper(object):
             } """ % (version,network.upper(),notes,emails)
 
         if ignoreWarnings == 'optional':
-            actUrl  = 'https://' + self.access_hostname + '/papi/v0/properties/'+ self.propertyId + '/activations/?contractId=' + self.contractId +'&groupId=' + self.groupId
+            actUrl  = 'https://' + self.access_hostname + '/papi/v0/properties/'+ propertyId + '/activations/?contractId=' + contractId +'&groupId=' + groupId
         else:
-            actUrl  = 'https://' + self.access_hostname + '/papi/v0/properties/'+ self.propertyId + '/activations/?contractId=' + self.contractId +'&groupId=' + self.groupId + '&acknowledgeAllWarnings=true'
+            actUrl  = 'https://' + self.access_hostname + '/papi/v0/properties/'+ propertyId + '/activations/?contractId=' + contractId +'&groupId=' + groupId + '&acknowledgeAllWarnings=true'
 
         actUrl = self.formUrl(actUrl)
 
@@ -462,7 +318,6 @@ class PapiWrapper(object):
                 if updatedactivationResponse.status_code == 201:
                     print("Here is the activation link, that can be used to track\n")
                     #print(updatedactivationResponse.json()['activationLink'])
-                    self.final_response = "SUCCESS"
                 else:
                     self.final_response = "FAILURE"
                     #print(updatedactivationResponse.json())
@@ -501,7 +356,7 @@ class PapiWrapper(object):
         """
 
         self.getPropertyInfo(session, property_name)
-        versionUrl = 'https://' + self.access_hostname  + '/papi/v0/properties/'+ self.propertyId + "/versions/" + '?contractId=' + self.contractId +'&groupId=' + self.groupId
+        versionUrl = 'https://' + self.access_hostname  + '/papi/v0/properties/'+ propertyId + "/versions/" + '?contractId=' + contractId +'&groupId=' + groupId
         versionUrl = self.formUrl(versionUrl)
 
         productId = ''
@@ -524,15 +379,15 @@ class PapiWrapper(object):
                 "cloneFromVersionEtag" : "%s"
             }
         }
-        """ % (productId,new_property_name,self.propertyId,version,versionEtag)
+        """ % (productId,new_property_name,propertyId,version,versionEtag)
 
-        cloneUrl = 'https://' + self.access_hostname  + '/papi/v0/properties/?contractId=' + self.contractId +'&groupId=' + self.groupId
+        cloneUrl = 'https://' + self.access_hostname  + '/papi/v0/properties/?contractId=' + contractId +'&groupId=' + groupId
         cloneUrl = self.formUrl(cloneUrl)
 
         cloneResponse = session.post(cloneUrl, data=cloneData, headers=self.headers)
         return cloneResponse
 
-    def createConfig(self,session,new_property_name,productId,contractId='options',groupId='optional'):
+    def createConfig(self,session,new_property_name,productId,contractId,groupId):
         """
         Function to create a configuration
 
@@ -548,12 +403,6 @@ class PapiWrapper(object):
         createResponse : createResponse
             (createResponse) Object with all response details.
         """
-        if contractId == 'optional' or groupId == 'optional':
-            self.getPropertyInfo(session, property_name)
-        else:
-            self.contractId = contractId
-            self.groupId = groupId
-
         createData = """
         {
             "productId"    : "%s",
@@ -561,13 +410,13 @@ class PapiWrapper(object):
         }
         """ % (productId,new_property_name)
 
-        createUrl = 'https://' + self.access_hostname  + '/papi/v0/properties/?contractId=' + self.contractId +'&groupId=' + self.groupId
+        createUrl = 'https://' + self.access_hostname  + '/papi/v0/properties/?contractId=' + contractId +'&groupId=' + groupId
         createUrl = self.formUrl(createUrl)
 
         createResponse = session.post(createUrl, data=createData, headers=self.headers)
         return createResponse
 
-    def deleteProperty(self,session,property_name):
+    def deleteProperty(self, session, propertyId, contractId, groupId):
         """
         Function to delete a property
 
@@ -584,22 +433,13 @@ class PapiWrapper(object):
             (deleteResponse) Object with all response details.
         """
 
-        self.getPropertyInfo(session, property_name)
-        deleteurl = 'https://' + self.access_hostname  + '/papi/v0/properties/'+ self.propertyId + '?contractId=' + self.contractId +'&groupId=' + self.groupId
+        deleteurl = 'https://' + self.access_hostname  + '/papi/v0/properties/'+ propertyId + '?contractId=' + contractId +'&groupId=' + groupId
         deleteurl = self.formUrl(deleteurl)
 
         deleteResponse = session.delete(deleteurl)
-        if deleteResponse.status_code == 403:
-            self.final_response == "FAILURE"
-        elif deleteResponse.status_code == 404:
-            self.final_response == "FAILURE"
-        elif deleteResponse.status_code == 200:
-            self.final_response == "SUCCESS"
-        else:
-            self.final_response == "FAILURE"
         return deleteResponse
 
-    def listProducts(self,session,contractId='optional'):
+    def listProducts(self,session,contractId):
         """
         Function to fetch all products
 
@@ -612,19 +452,10 @@ class PapiWrapper(object):
         -------
         Nothing: It rather prints the data
         """
-        if contractId == 'optional':
-            contractsResponse = self.getContracts(session)
-            for everyItem in contractsResponse.json()['contracts']['items']:
-                contractId = everyItem['contractId']
-                productsUrl = 'https://' + self.access_hostname + '/papi/v0/products/?contractId=' + contractId
-                productsUrl = self.formUrl(productsUrl)
+        productsUrl = 'https://' + self.access_hostname + '/papi/v0/products/?contractId=' + contractId
+        productsUrl = self.formUrl(productsUrl)
 
-                productsResponse = session.get(productsUrl)
-        else:
-            productsUrl = 'https://' + self.access_hostname + '/papi/v0/products/?contractId=' + contractId
-            productsUrl = self.formUrl(productsUrl)
-
-            productsResponse = session.get(productsUrl)
+        productsResponse = session.get(productsUrl)
         return productsResponse
 
 
@@ -648,7 +479,7 @@ class PapiWrapper(object):
         ruleFomratResponse = session.get(ruleFomratUrl)
         return ruleFomratResponse
 
-    def getRuleTree(self,session,property_name,version,latestTimeStamp='latest'):
+    def getRuleTree(self,session,propertyId,contractId,groupId,version,latestTimeStamp='latest'):
         """
         Function to get the entire rule tree for a property version
 
@@ -667,15 +498,14 @@ class PapiWrapper(object):
         mime_header = {
             "Accept": AcceptValue
         }
-        self.getPropertyInfo(session, property_name)
-        '/papi/v0/properties/' + self.propertyId + '/versions/' + version + '/rules/?contractId=' + self.contractId + '&groupId=' + self.groupId
-        ruleTreeUrl = 'https://' + self.access_hostname + '/papi/v0/properties/' + self.propertyId + '/versions/' + version + '/rules/?contractId=' + self.contractId + '&groupId=' + self.groupId
+        
+        ruleTreeUrl = 'https://' + self.access_hostname + '/papi/v0/properties/' + propertyId + '/versions/' + version + '/rules/?contractId=' + contractId + '&groupId=' + groupId
         ruleTreeUrl = self.formUrl(ruleTreeUrl)
 
         ruleTreeResponse = session.get(ruleTreeUrl,headers=mime_header)
         return ruleTreeResponse
 
-    def updateRuleTree(self,session,property_name,version,TimeStamp):
+    def updateRuleTree(self,session,propertyId,contractId,groupId,version):
         """
         Function to update the entire rule tree for a property version to
 
@@ -692,9 +522,8 @@ class PapiWrapper(object):
         mime_header = {
             "Content-Type": "application/vnd.akamai.papirules.v2016-11-15+json"
         }
-        self.getPropertyInfo(session, property_name)
-        '/papi/v0/properties/' + self.propertyId + '/versions/' + version + '/rules/?contractId=' + self.contractId + '&groupId=' + self.groupId
-        updateruleTreeUrl = 'https://' + self.access_hostname + '/papi/v0/properties/' + self.propertyId + '/versions/' + version + '/rules/?contractId=' + self.contractId + '&groupId=' + self.groupId
+        
+        updateruleTreeUrl = 'https://' + self.access_hostname + '/papi/v0/properties/' + propertyId + '/versions/' + version + '/rules/?contractId=' + contractId + '&groupId=' + groupId
         updateruleTreeUrl = self.formUrl(updateruleTreeUrl)
 
         updateruleTreeResponse = session.put(updateruleTreeUrl,headers=mime_header)
@@ -714,8 +543,8 @@ class PapiWrapper(object):
         createEdgeHostnameResponse : createEdgeHostnameResponse
             (createEdgeHostnameResponse) Object with all response details.
         """
-        self.contractId = contractId
-        self.groupId = groupId
+        contractId = contractId
+        groupId = groupId
 
         hostnameData = """
         {
@@ -725,7 +554,7 @@ class PapiWrapper(object):
             "ipVersionBehavior": "IPV4"
         }
         """ % (productId,hostname)
-        createEdgeHostnameUrl = 'https://' + self.access_hostname + '/papi/v0/edgehostnames/?contractId=' + self.contractId + '&groupId=' + self.groupId
+        createEdgeHostnameUrl = 'https://' + self.access_hostname + '/papi/v0/edgehostnames/?contractId=' + contractId + '&groupId=' + groupId
         createEdgeHostnameUrl = self.formUrl(createEdgeHostnameUrl)
 
         createEdgeHostnameResponse = session.post(createEdgeHostnameUrl,data=hostnameData,headers=self.headers)
@@ -745,9 +574,9 @@ class PapiWrapper(object):
         updateHostnameResponse : updateHostnameResponse
             (updateHostnameResponse) Object with all response details.
         """
-        self.propertyId = propertyId
-        self.contractId = contractId
-        self.groupId = groupId
+        propertyId = propertyId
+        contractId = contractId
+        groupId = groupId
 
         hostnameData = """
         [
@@ -759,7 +588,7 @@ class PapiWrapper(object):
         ]
         """ % (hostname,edgeHostnameId)
 
-        updateHostnameUrl = 'https://' + self.access_hostname + '/papi/v0/properties/' + self.propertyId + '/versions/' + str(version) + '/hostnames/?contractId=' + self.contractId + '&groupId=' + self.groupId + '&validateHostnames=false'
+        updateHostnameUrl = 'https://' + self.access_hostname + '/papi/v0/properties/' + propertyId + '/versions/' + str(version) + '/hostnames/?contractId=' + contractId + '&groupId=' + groupId + '&validateHostnames=false'
         updateHostnameUrl = self.formUrl(updateHostnameUrl)
 
         updateHostnameResponse = session.put(updateHostnameUrl,data=hostnameData,headers=self.headers)
@@ -785,7 +614,7 @@ class PapiWrapper(object):
         credsResponse = session.get(credsUrl)
         return credsResponse
 
-    def listEdgeHostnames(self,session,contractId='optional',groupId='optional'):
+    def listEdgeHostnames(self,session,contractId,groupId):
         """
         Function to fetch all edgehostnames
 
@@ -811,7 +640,7 @@ class PapiWrapper(object):
             edgehostnameResponse = session.get(edgehostnameUrl)
         return edgehostnameResponse
 
-    def listProperties(self,session,contractId='optional',groupId='optional'):
+    def listProperties(self,session,contractId,groupId):
         """
         Function to fetch all properties
 
@@ -838,7 +667,7 @@ class PapiWrapper(object):
         return propertiesListResponse
 
 
-    def listHostnames(self,session,propertyId='optional',version='optional',contractId='optional',groupId='optional'):
+    def listHostnames(self,session,propertyId,version,contractId,groupId):
         """
         Function to fetch all properties
 
@@ -854,14 +683,11 @@ class PapiWrapper(object):
         -------
         hostNameList : hostName List object
         """
-        if contractId == 'optional' and groupId == 'optional' and propertyId == 'optional'and version == 'optional':
-            #update code to fetch group and contract info
-            pass
-        else:
-            hostnameListUrl = 'https://' + self.access_hostname + '/papi/v1/properties/' + propertyId + '/versions/' + str(version) + '/hostnames'+ '?contractId=' + contractId + '&groupId=' + groupId
-            hostnameListUrl = self.formUrl(hostnameListUrl)
 
-            hostnameListResponse = session.get(hostnameListUrl)
+        hostnameListUrl = 'https://' + self.access_hostname + '/papi/v1/properties/' + propertyId + '/versions/' + str(version) + '/hostnames'+ '?contractId=' + contractId + '&groupId=' + groupId
+        hostnameListUrl = self.formUrl(hostnameListUrl)
+
+        hostnameListResponse = session.get(hostnameListUrl)
         return hostnameListResponse
 
     def formUrl(self, url):
