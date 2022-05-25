@@ -1,0 +1,5 @@
+# creation rules are evaluated sequentially, the first match wins
+creation_rules:
+        # upon creation of a file that matches the pattern *.dev.yaml,
+        - path_regex: \.dev\.yaml$
+          kms: 'arn:aws:kms:us-east-1:487173517556:key/0ba28dad-0ea6-411b-a012-21b585d87459'
