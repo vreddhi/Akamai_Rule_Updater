@@ -1,7 +1,7 @@
 # RuleUpdater
 
-Python script to add/delete rules in Akamai delivery configuration. The script can:
-- Add a new rule after/before a rule.
+Python script to add/delete rules in Akamai delivery configuration. The script can do the following:
+- Add a new rule after/before a rule. 
 - Delete a rule
 - Replace a rule
 - Download a Rule
